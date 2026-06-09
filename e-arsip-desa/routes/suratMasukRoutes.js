@@ -4,7 +4,6 @@ const suratMasukController = require('../controllers/suratMasukController');
 const { verifyToken, checkRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
-router.get('/', verifyToken, suratMasukController.getAll);
 router.get('/', verifyToken, checkRole(['admin', 'operator', 'kades']), suratMasukController.getAll);
 router.get('/:id', verifyToken, suratMasukController.getById);
 router.post('/', verifyToken, checkRole(['admin', 'operator', 'kades']), upload.single('lampiran'), suratMasukController.create);

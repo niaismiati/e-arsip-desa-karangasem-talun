@@ -1,5 +1,5 @@
-import { Plus, Edit, Trash2, X, User } from 'lucide-react';
-import { useState } from 'react';
+import { Plus, Edit, Trash2, X, User, AlertCircle, Key, ToggleLeft, ToggleRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface UserData {
   id: number;
@@ -9,82 +9,219 @@ interface UserData {
   status: string;
 }
 
-const initialUsers: UserData[] = [
-  {
-    id: 1,
-    nama: 'Operator Desa Karangasem',
-    email: 'operator@karangasem.desa.id',
-    role: 'Operator',
-    status: 'Aktif'
-  },
-  {
-    id: 2,
-    nama: 'Kepala Desa Karangasem',
-    email: 'kades@karangasem.desa.id',
-    role: 'Kepala Desa',
-    status: 'Aktif'
-  },
-  {
-    id: 3,
-    nama: 'Admin Sistem',
-    email: 'admin@karangasem.desa.id',
-    role: 'Admin',
-    status: 'Aktif'
-  }
-];
-
 export function KelolaUser() {
-  const [users, setUsers] = useState<UserData[]>(initialUsers);
+  const [users, setUsers] = useState<UserData[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     nama: '',
     email: '',
     password: '',
     role: 'operator'
   });
+  const [resetPassword, setResetPassword] = useState<{ id: number; nama: string } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const token = localStorage.getItem('token') || '';
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newUser: UserData = {
-      id: users.length + 1,
-      nama: formData.nama,
-      email: formData.email,
-      role: formData.role === 'operator' ? 'Operator' : formData.role === 'kades' ? 'Kepala Desa' : 'Admin',
-      status: 'Aktif'
-    };
-    setUsers([...users, newUser]);
-    setShowModal(false);
-    setFormData({ nama: '', email: '', password: '', role: 'operator' });
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/users', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUsers(data.data);
+        setError('');
+      } else {
+        setError(data.message || 'Gagal load users');
+      }
+    } catch (err) {
+      setError('Gagal load users: ' + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm('Yakin ingin menghapus pengguna ini?')) {
-      setUsers(users.filter(u => u.id !== id));
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!formData.nama || !formData.email) {
+      setError('Nama dan email wajib diisi');
+      return;
+    }
+
+    if (!editingId && !formData.password) {
+      setError('Password wajib diisi untuk pengguna baru');
+      return;
+    }
+
+    try {
+      const url = editingId ? `/api/users/${editingId}` : '/api/users';
+      const method = editingId ? 'PUT' : 'POST';
+      const body: any = {
+        nama: formData.nama,
+        email: formData.email,
+        role: formData.role,
+      };
+      if (!editingId || formData.password) {
+        body.password = formData.password;
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        await loadUsers();
+        setShowModal(false);
+        setEditingId(null);
+        setFormData({ nama: '', email: '', password: '', role: 'operator' });
+      } else {
+        setError(data.message || 'Gagal menyimpan user');
+      }
+    } catch (err) {
+      setError('Error: ' + (err as Error).message);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Yakin ingin menghapus pengguna ini?')) return;
+    
+    try {
+      const res = await fetch(`/api/users/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadUsers();
+      } else {
+        setError(data.message || 'Gagal hapus user');
+      }
+    } catch (err) {
+      setError('Error: ' + (err as Error).message);
+    }
+  };
+
+  const handleEdit = (user: UserData) => {
+    setEditingId(user.id);
+    setFormData({
+      nama: user.nama,
+      email: user.email,
+      password: '',
+      role: user.role
+    });
+    setShowModal(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPassword || newPassword.length < 6) {
+      setError('Password minimal 6 karakter');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/${resetPassword.id}/password`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: newPassword })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResetPassword(null);
+        setNewPassword('');
+        setError('');
+      } else {
+        setError(data.message || 'Gagal reset password');
+      }
+    } catch (err) {
+      setError('Error: ' + (err as Error).message);
+    }
+  };
+
+  const handleToggleStatus = async (user: UserData) => {
+    const newStatus = user.status === 'Aktif' ? 'Nonaktif' : 'Aktif';
+    if (!confirm(`Yakin ingin ${newStatus === 'Nonaktif' ? 'menonaktifkan' : 'mengaktifkan'} pengguna ${user.nama}?`)) return;
+    try {
+      const res = await fetch(`/api/users/${user.id}/toggle-active`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadUsers();
+      } else {
+        setError(data.message || 'Gagal mengubah status');
+      }
+    } catch (err) {
+      setError('Error: ' + (err as Error).message);
     }
   };
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
-      case 'Admin':
+      case 'admin':
         return 'bg-gray-700 text-white';
-      case 'Kepala Desa':
+      case 'kades':
         return 'bg-indigo-700 text-white';
       default:
         return 'bg-green-700 text-white';
     }
   };
 
+  const getRoleDisplay = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'Admin';
+      case 'kades':
+      case 'pimpinan':
+        return 'Kepala Desa';
+      default:
+        return 'Operator';
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-red-600" />
+          <span className="text-sm text-red-700">{error}</span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
-         <h2 className="text-2xl font-bold text-gray-900">Kelola Pengguna</h2>
-         <button
-           onClick={() => setShowModal(true)}
-           className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
-         >
-           <Plus className="w-5 h-5" />
-           Tambah Pengguna
-         </button>
+        <h2 className="text-2xl font-bold text-gray-900">Kelola Pengguna</h2>
+        <button
+          onClick={() => {
+            setEditingId(null);
+            setFormData({ nama: '', email: '', password: '', role: 'operator' });
+            setShowModal(true);
+          }}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+        >
+          <Plus className="w-5 h-5" />
+          Tambah Pengguna
+        </button>
       </div>
 
       {/* Table */}
@@ -102,54 +239,83 @@ export function KelolaUser() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {users.map((user, index) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900">{index + 1}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                        <User className="w-5 h-5 text-gray-600" />
+              {loading ? (
+                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">Memuat...</td></tr>
+              ) : users.length === 0 ? (
+                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">Tidak ada pengguna</td></tr>
+              ) : (
+                users.map((user, index) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-900">{index + 1}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                          <User className="w-5 h-5 text-gray-600" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{user.nama}</span>
                       </div>
-                      <span className="text-sm font-medium text-gray-900">{user.nama}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                     <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button className="p-1 text-indigo-600 hover:bg-blue-50 rounded">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user.id)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
+                        {getRoleDisplay(user.role)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        user.status === 'Aktif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {user.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEdit(user)}
+                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
+                          title="Edit"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleToggleStatus(user)}
+                          className={`p-1.5 rounded ${user.status === 'Aktif' ? 'text-orange-600 hover:bg-orange-50' : 'text-green-600 hover:bg-green-50'}`}
+                          title={user.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}
+                        >
+                          {user.status === 'Aktif' ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => { setResetPassword({ id: user.id, nama: user.nama }); setNewPassword(''); setError(''); }}
+                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded"
+                          title="Reset Password"
+                        >
+                          <Key className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user.id)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                          title="Hapus"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Modal Tambah Pengguna */}
+      {/* Modal Tambah/Edit Pengguna */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-xl font-semibold text-gray-900">Tambah Pengguna</h3>
+              <h3 className="text-xl font-semibold text-gray-900">
+                {editingId ? 'Edit' : 'Tambah'} Pengguna
+              </h3>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -184,14 +350,14 @@ export function KelolaUser() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
+                  Password {editingId && '(kosongkan jika tidak ingin diubah)'}
                 </label>
                 <input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  required
+                  required={!editingId}
                   minLength={6}
                 />
                 <p className="text-xs text-gray-500 mt-1">Minimal 6 karakter</p>
@@ -213,7 +379,7 @@ export function KelolaUser() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
-                   className="flex-1 bg-indigo-600 text-white py-2 rounded-md font-medium hover:bg-indigo-700 transition-colors"
+                  className="flex-1 bg-indigo-600 text-white py-2 rounded-md font-medium hover:bg-indigo-700 transition-colors"
                 >
                   Simpan
                 </button>
@@ -226,6 +392,44 @@ export function KelolaUser() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal Reset Password */}
+      {resetPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900">Reset Password</h3>
+              <button onClick={() => setResetPassword(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Reset password untuk <strong>{resetPassword.nama}</strong>
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password Baru</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Minimal 6 karakter"
+                  minLength={6}
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={handleResetPassword} className="flex-1 bg-amber-600 text-white py-2 rounded-md font-medium hover:bg-amber-700 transition-colors">
+                  Reset Password
+                </button>
+                <button onClick={() => setResetPassword(null)} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-md font-medium hover:bg-gray-300 transition-colors">
+                  Batal
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

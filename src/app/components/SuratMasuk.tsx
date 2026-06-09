@@ -1,45 +1,21 @@
-import { Plus, Search, Edit, Trash2, FileText, X, Mail, Clock, Filter } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Download, FileText, X, Mail } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
 interface Surat {
   id: number;
-  nomor: string;
+  nomor_surat: string;
   asal: string;
   perihal: string;
   tanggal: string;
+  tanggalSuratRaw?: string;
+  tanggalTerimaRaw?: string;
+  klasifikasi_id?: string;
+  klasifikasi_kode?: string;
+  klasifikasi_nama?: string;
   klasifikasi: string;
   status: string;
+  lampiran?: string | null;
 }
-
-const initialData: Surat[] = [
-  {
-    id: 1,
-    nomor: '005/123/PMD/V/2026',
-    asal: 'Dinas PMD Kab. Pekalongan',
-    perihal: 'Undangan Musrenbang Desa',
-    tanggal: '01/05/2026',
-    klasifikasi: '000 - Umum',
-    status: 'Menunggu'
-  },
-  {
-    id: 2,
-    nomor: '042/KEC/TLN/V/2026',
-    asal: 'Kecamatan Talun',
-    perihal: 'Pemberitahuan Lomba Desa',
-    tanggal: '01/05/2026',
-    klasifikasi: '000 - Umum',
-    status: 'Diproses'
-  },
-  {
-    id: 3,
-    nomor: '018/BD/V/2026',
-    asal: 'Bidan Desa',
-    perihal: 'Laporan Kegiatan Posyandu',
-    tanggal: '01/05/2026',
-    klasifikasi: '400 - Kesejahteraan',
-    status: 'Selesai'
-  }
-];
 
 export function SuratMasuk() {
   const [suratList, setSuratList] = useState<Surat[]>([]);
@@ -95,12 +71,18 @@ export function SuratMasuk() {
       if (data.success) {
         setSuratList((data.data as any[]).map((s): Surat => ({
           id: s.id,
-          nomor: s.nomor_surat,
+          nomor_surat: s.nomor_surat,
           asal: s.asal_surat,
           perihal: s.perihal,
           tanggal: new Date(s.tanggal_terima).toLocaleDateString('id-ID'),
-          klasifikasi: s.klasifikasi ? `${s.klasifikasi.kode} - ${s.klasifikasi.nama}` : 'Umum',
-          status: s.status || 'Menunggu'
+          tanggalSuratRaw: s.tanggal_surat,
+          tanggalTerimaRaw: s.tanggal_terima,
+          klasifikasi_id: s.klasifikasi_id?.toString?.() || '',
+          klasifikasi_kode: s.klasifikasi_kode,
+          klasifikasi_nama: s.klasifikasi_nama,
+          klasifikasi: s.klasifikasi_kode ? `${s.klasifikasi_kode} - ${s.klasifikasi_nama}` : 'Umum',
+          status: s.status || 'Menunggu',
+          lampiran: s.lampiran || null
         })));
         setError('');
       } else {
@@ -118,6 +100,12 @@ export function SuratMasuk() {
     fetchSurat({ search: searchTerm, ...filters });
   }, [fetchKlasifikasi, fetchSurat, searchTerm, filters]);
 
+  // Auto-refresh: polling every 15 detik (SSE tidak tersedia di backend)
+  useEffect(() => {
+    const iv = setInterval(() => fetchSurat({ search: searchTerm, ...filters }), 15000);
+    return () => clearInterval(iv);
+  }, [searchTerm, filters, fetchSurat]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setLampiranFile(e.target.files[0]);
@@ -127,12 +115,12 @@ export function SuratMasuk() {
   const handleEdit = (surat: Surat) => {
     setEditingId(surat.id);
     setFormData({
-      nomor: surat.nomor,
+      nomor: surat.nomor_surat,
       asal: surat.asal,
       perihal: surat.perihal,
-      tanggalSurat: new Date(surat.tanggal).toISOString().split('T')[0], 
-      tanggalTerima: new Date(surat.tanggal).toISOString().split('T')[0],
-      klasifikasi: ''
+      tanggalSurat: surat.tanggalSuratRaw ? surat.tanggalSuratRaw.split('T')[0] : '',
+      tanggalTerima: surat.tanggalTerimaRaw ? surat.tanggalTerimaRaw.split('T')[0] : '',
+      klasifikasi: surat.klasifikasi_id || ''
     });
     setShowModal(true);
   };
@@ -197,22 +185,34 @@ export function SuratMasuk() {
       if (data.success) {
         await fetchSurat({ search: searchTerm, ...filters });
       } else {
-        alert(data.message);
+        setError(data.message);
       }
     } catch (err) {
-      alert('Gagal hapus: ' + (err as Error).message);
+      setError('Gagal hapus: ' + (err as Error).message);
     }
   };
 
   const handleFilterChange = (key: string, value: string) => {
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-    fetchSurat({ search: searchTerm, ...newFilters });
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const onSearchChange = (term: string) => {
     setSearchTerm(term);
-    fetchSurat({ search: term, ...filters });
+  };
+
+  const statusLabel = (status: string) => {
+    switch (status) {
+      case 'Belum Disposisi':
+        return 'Belum Disposisi';
+      case 'Diproses':
+        return 'Diproses';
+      case 'Selesai':
+        return 'Selesai';
+      case 'Menunggu':
+        return 'Menunggu';
+      default:
+        return status;
+    }
   };
 
   const filteredSurat = suratList;
@@ -248,28 +248,42 @@ export function SuratMasuk() {
               className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
             />
           </div>
-          <select className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm">
+          <select
+            value={filters.klasifikasi}
+            onChange={(e) => handleFilterChange('klasifikasi', e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
+          >
             <option value="">Semua Klasifikasi</option>
-            <option value="000">000 - Umum</option>
-            <option value="100">100 - Pemerintahan</option>
-            <option value="400">400 - Kesejahteraan</option>
+            {klasifikasiList.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.kode} - {item.nama}
+              </option>
+            ))}
           </select>
-          <select className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm">
+          <select
+            value={filters.asal}
+            onChange={(e) => handleFilterChange('asal', e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
+          >
             <option value="">Semua Asal Surat</option>
-            <option value="dinas">Dinas</option>
-            <option value="kecamatan">Kecamatan</option>
+            <option value="Dinas">Dinas</option>
+            <option value="Kecamatan">Kecamatan</option>
           </select>
-          <select className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm">
+          <select
+            value={filters.status}
+            onChange={(e) => handleFilterChange('status', e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
+          >
             <option value="">Semua Status</option>
-            <option value="menunggu">Menunggu</option>
-            <option value="diproses">Diproses</option>
-            <option value="selesai">Selesai</option>
+            <option value="Belum Disposisi">Belum Disposisi</option>
+            <option value="Diproses">Diproses</option>
+            <option value="Selesai">Selesai</option>
           </select>
-          <button className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 text-sm">
+          <button onClick={() => fetchSurat({ search: searchTerm, ...filters })} className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 text-sm">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Filter
+            Refresh
           </button>
         </div>
       </div>
@@ -294,7 +308,7 @@ export function SuratMasuk() {
               {filteredSurat.map((surat, index) => (
                 <tr key={surat.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-900">{index + 1}</td>
-                  <td className="px-6 py-4 text-sm font-mono text-gray-900">{surat.nomor}</td>
+                  <td className="px-6 py-4 text-sm font-mono text-gray-900">{surat.nomor_surat}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{surat.asal}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{surat.perihal}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{surat.tanggal}</td>
@@ -303,27 +317,37 @@ export function SuratMasuk() {
                     <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       surat.status === 'Selesai'
                         ? 'bg-green-100 text-green-800'
-                        : surat.status === 'Menunggu'
+                        : surat.status === 'Belum Disposisi'
                         ? 'bg-orange-100 text-orange-800'
-                        : 'bg-indigo-100 text-indigo-800'
+                        : surat.status === 'Diproses'
+                        ? 'bg-indigo-100 text-indigo-800'
+                        : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {surat.status}
+                      {statusLabel(surat.status)}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <button className="p-1 text-indigo-600 hover:bg-blue-50 rounded">
+                      <button onClick={() => handleEdit(surat)} className="p-1 text-indigo-600 hover:bg-blue-50 rounded" title="Edit">
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(surat.id)}
                         className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        title="Hapus"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                      <button className="p-1 text-green-600 hover:bg-green-50 rounded">
-                        <FileText className="w-4 h-4" />
-                      </button>
+                      {surat.lampiran && (
+                        <a href={surat.lampiran} target="_blank" rel="noopener noreferrer" className="p-1 text-green-600 hover:bg-green-50 rounded inline-flex" title="Unduh Lampiran">
+                          <Download className="w-4 h-4" />
+                        </a>
+                      )}
+                      {!surat.lampiran && (
+                        <span className="p-1 text-gray-300 rounded inline-flex" title="Tidak ada lampiran">
+                          <FileText className="w-4 h-4" />
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -415,14 +439,15 @@ export function SuratMasuk() {
                 </label>
                 <select
                   value={formData.klasifikasi}
-                  onChange={(e) => setFormData({...formData, klasifikasi: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, klasifikasi: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#2E7D32] focus:border-transparent outline-none"
                 >
-                  <option value="000">000 - Umum</option>
-                  <option value="100">100 - Pemerintahan</option>
-                  <option value="400">400 - Kesejahteraan</option>
-                  <option value="800">800 - Kepegawaian</option>
-                  <option value="900">900 - Keuangan</option>
+                  <option value="">Pilih klasifikasi</option>
+                  {klasifikasiList.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.kode} - {item.nama}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>

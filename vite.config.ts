@@ -7,7 +7,7 @@ export default defineConfig({
   css: {
     postcss: './postcss.config.cjs',
   },
-
+  publicDir: 'e-arsip-desa/public',
   server: {
     proxy: {
       '/api': {

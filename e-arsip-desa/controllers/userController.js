@@ -59,6 +59,9 @@ exports.createUser = (req, res) => {
 
     const newUser = db.prepare('SELECT id, nama, email, role, status, created_at FROM users WHERE id = ?').get(result.lastInsertRowid);
 
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'users', `Menambahkan pengguna: ${nama} (${role})`);
+
     res.status(201).json({ success: true, message: 'Pengguna berhasil ditambahkan.', data: newUser });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -92,6 +95,10 @@ exports.updateUser = (req, res) => {
     `).run(nama || null, email || null, role || null, status || null, id);
 
     const updated = db.prepare('SELECT id, nama, email, role, status, avatar, created_at FROM users WHERE id = ?').get(id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'users', `Memperbarui pengguna: ${updated.nama}`);
+
     res.json({ success: true, message: 'Pengguna berhasil diperbarui.', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -111,8 +118,47 @@ exports.deleteUser = (req, res) => {
       return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
     }
 
+    const disposisiCount = db.prepare('SELECT COUNT(*) as total FROM disposisi WHERE dari_user_id = ? OR kepada_user_id = ?').get(id, id);
+    if (disposisiCount.total > 0) {
+      return res.status(400).json({ success: false, message: `Tidak dapat menghapus: pengguna masih memiliki ${disposisiCount.total} disposisi terkait.` });
+    }
+
+    const aktivitasCount = db.prepare('SELECT COUNT(*) as total FROM aktivitas WHERE user_id = ?').get(id);
+    if (aktivitasCount.total > 0) {
+      db.prepare('UPDATE aktivitas SET user_id = NULL WHERE user_id = ?').run(id);
+    }
+
     db.prepare('DELETE FROM users WHERE id = ?').run(id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'users', `Menghapus pengguna: ${user.nama}`);
+
     res.json({ success: true, message: 'Pengguna berhasil dihapus.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.toggleActive = (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({ success: false, message: 'Tidak dapat mengubah status akun sendiri.' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
+    }
+
+    const newStatus = user.status === 'Aktif' ? 'Nonaktif' : 'Aktif';
+    db.prepare('UPDATE users SET status = ? WHERE id = ?').run(newStatus, id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'users', `${newStatus === 'Aktif' ? 'Mengaktifkan' : 'Menonaktifkan'} pengguna: ${user.nama}`);
+
+    res.json({ success: true, message: `Pengguna berhasil ${newStatus === 'Aktif' ? 'diaktifkan' : 'dinonaktifkan'}.` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -134,6 +180,9 @@ exports.changePassword = (req, res) => {
 
     const hashedPassword = bcrypt.hashSync(password, 10);
     db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'users', `Mereset password pengguna: ${user.nama}`);
 
     res.json({ success: true, message: 'Password berhasil diubah.' });
   } catch (error) {

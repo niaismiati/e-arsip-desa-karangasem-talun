@@ -64,12 +64,18 @@ exports.create = (req, res) => {
       return res.status(400).json({ success: false, message: 'Field wajib: nomor_surat, asal_surat, perihal, tanggal_surat, tanggal_terima.' });
     }
 
+    // Check for duplicate nomor_surat
+    const dup = db.prepare('SELECT id FROM surat_masuk WHERE nomor_surat = ?').get(nomor_surat);
+    if (dup) {
+      return res.status(409).json({ success: false, message: 'Nomor surat sudah digunakan.' });
+    }
+
     const lampiran = req.file ? `/uploads/${req.file.filename}` : null;
 
     const result = db.prepare(`
       INSERT INTO surat_masuk (nomor_surat, asal_surat, perihal, tanggal_surat, tanggal_terima, klasifikasi_id, status, lampiran)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(nomor_surat, asal_surat, perihal, tanggal_surat, tanggal_terima, klasifikasi_id || null, status || 'Menunggu', lampiran);
+    `).run(nomor_surat, asal_surat, perihal, tanggal_surat, tanggal_terima, klasifikasi_id || null, status || 'Belum Disposisi', lampiran);
 
     const newRow = db.prepare(`
       SELECT sm.*, k.kode as klasifikasi_kode, k.nama as klasifikasi_nama
@@ -102,20 +108,20 @@ exports.update = (req, res) => {
 
     db.prepare(`
       UPDATE surat_masuk
-      SET nomor_surat = COALESCE(?, nomor_surat),
-          asal_surat = COALESCE(?, asal_surat),
-          perihal = COALESCE(?, perihal),
-          tanggal_surat = COALESCE(?, tanggal_surat),
-          tanggal_terima = COALESCE(?, tanggal_terima),
-          klasifikasi_id = COALESCE(?, klasifikasi_id),
-          status = COALESCE(?, status),
-          lampiran = COALESCE(?, lampiran)
+      SET nomor_surat = ?,
+          asal_surat = ?,
+          perihal = ?,
+          tanggal_surat = ?,
+          tanggal_terima = ?,
+          klasifikasi_id = ?,
+          status = ?,
+          lampiran = ?
       WHERE id = ?
     `).run(
-      nomor_surat || null, asal_surat || null, perihal || null,
-      tanggal_surat || null, tanggal_terima || null,
-      klasifikasi_id !== undefined ? klasifikasi_id : null,
-      status || null, lampiran || null, id
+      nomor_surat, asal_surat, perihal,
+      tanggal_surat, tanggal_terima,
+      klasifikasi_id || null,
+      status || existing.status, lampiran || null, id
     );
 
     const updated = db.prepare(`
@@ -124,6 +130,9 @@ exports.update = (req, res) => {
       LEFT JOIN klasifikasi k ON sm.klasifikasi_id = k.id
       WHERE sm.id = ?
     `).get(id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'surat_masuk', `Memperbarui surat masuk: ${updated.perihal}`);
 
     res.json({ success: true, message: 'Surat masuk berhasil diperbarui.', data: updated });
   } catch (error) {
@@ -140,6 +149,10 @@ exports.delete = (req, res) => {
     }
 
     db.prepare('DELETE FROM surat_masuk WHERE id = ?').run(id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'surat_masuk', `Menghapus surat masuk: ${existing.perihal}`);
+
     res.json({ success: true, message: 'Surat masuk berhasil dihapus.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

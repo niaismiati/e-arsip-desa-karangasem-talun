@@ -2,13 +2,21 @@ const db = require('../config/database');
 
 exports.getAll = (req, res) => {
   try {
-    const rows = db.prepare(`
+    const { search } = req.query;
+    let sql = `
       SELECT k.*,
         (SELECT COUNT(*) FROM surat_masuk WHERE klasifikasi_id = k.id) + 
         (SELECT COUNT(*) FROM surat_keluar WHERE klasifikasi_id = k.id) as total_arsip
       FROM klasifikasi k
-      ORDER BY k.kode ASC
-    `).all();
+      WHERE 1=1
+    `;
+    const params = [];
+    if (search) {
+      sql += ` AND (k.kode LIKE ? OR k.nama LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`);
+    }
+    sql += ` ORDER BY k.kode ASC`;
+    const rows = db.prepare(sql).all(...params);
     res.json({ success: true, data: rows });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -45,6 +53,10 @@ exports.create = (req, res) => {
     ).run(kode, nama, keterangan || null);
 
     const newRow = db.prepare('SELECT * FROM klasifikasi WHERE id = ?').get(result.lastInsertRowid);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'klasifikasi', `Menambahkan klasifikasi: ${kode} - ${nama}`);
+
     res.status(201).json({ success: true, message: 'Klasifikasi berhasil ditambahkan.', data: newRow });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -77,6 +89,10 @@ exports.update = (req, res) => {
     `).run(kode || null, nama || null, keterangan !== undefined ? keterangan : null, id);
 
     const updated = db.prepare('SELECT * FROM klasifikasi WHERE id = ?').get(id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'klasifikasi', `Memperbarui klasifikasi: ${updated.kode} - ${updated.nama}`);
+
     res.json({ success: true, message: 'Klasifikasi berhasil diperbarui.', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -91,7 +107,17 @@ exports.delete = (req, res) => {
       return res.status(404).json({ success: false, message: 'Klasifikasi tidak ditemukan.' });
     }
 
+    const suratCount = db.prepare('SELECT COUNT(*) as total FROM surat_masuk WHERE klasifikasi_id = ?').get(id);
+    const keluarCount = db.prepare('SELECT COUNT(*) as total FROM surat_keluar WHERE klasifikasi_id = ?').get(id);
+    if (suratCount.total > 0 || keluarCount.total > 0) {
+      return res.status(400).json({ success: false, message: `Tidak dapat menghapus: klasifikasi digunakan oleh ${suratCount.total} surat masuk dan ${keluarCount.total} surat keluar.` });
+    }
+
     db.prepare('DELETE FROM klasifikasi WHERE id = ?').run(id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'klasifikasi', `Menghapus klasifikasi: ${existing.kode} - ${existing.nama}`);
+
     res.json({ success: true, message: 'Klasifikasi berhasil dihapus.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

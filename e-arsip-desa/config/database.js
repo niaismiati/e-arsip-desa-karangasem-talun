@@ -44,7 +44,7 @@ function initDatabase() {
       tanggal_surat DATE NOT NULL,
       tanggal_terima DATE NOT NULL,
       klasifikasi_id INTEGER,
-      status TEXT DEFAULT 'Menunggu' CHECK(status IN ('Belum Disposisi', 'Menunggu', 'Diproses', 'Selesai')),
+      status TEXT DEFAULT 'Belum Disposisi' CHECK(status IN ('Belum Disposisi', 'Diproses', 'Selesai')),
       lampiran TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (klasifikasi_id) REFERENCES klasifikasi(id)
@@ -173,7 +173,7 @@ function seedData() {
       INSERT INTO surat_masuk (nomor_surat, asal_surat, perihal, tanggal_surat, tanggal_terima, klasifikasi_id, status)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    insertSuratMasuk.run('005/123/PMD/VI/2024', 'Dinas PMD Kab. Pekalongan', 'Undangan Musrenbang Desa', '2024-06-12', '2024-06-12', 1, 'Menunggu');
+    insertSuratMasuk.run('005/123/PMD/VI/2024', 'Dinas PMD Kab. Pekalongan', 'Undangan Musrenbang Desa', '2024-06-12', '2024-06-12', 1, 'Belum Disposisi');
     insertSuratMasuk.run('042/KEC/TLN/VI/2024', 'Kecamatan Talun', 'Pemberitahuan Lomba Desa', '2024-06-11', '2024-06-11', 1, 'Diproses');
     insertSuratMasuk.run('018/BD/VI/2024', 'Bidan Desa', 'Laporan Kegiatan Posyandu', '2024-06-10', '2024-06-10', 3, 'Selesai');
     console.log('✅ Sample surat masuk seeded');
@@ -191,8 +191,41 @@ function seedData() {
     console.log('✅ Sample surat keluar seeded');
   }
 
-// Skip disposisi seed to avoid FK error
-  console.log('✅ Seed complete (disposisi skipped)');
+// Seed sample disposisi
+  const disposisiCount = db.prepare('SELECT COUNT(*) as count FROM disposisi').get();
+  if (disposisiCount.count === 0) {
+    const suratMasukRows = db.prepare('SELECT id, status FROM surat_masuk ORDER BY id ASC').all();
+    const userRows = db.prepare('SELECT id, role FROM users ORDER BY id ASC').all();
+    const adminUser = userRows.find(u => u.role === 'admin') || userRows[0];
+    const kadesUser = userRows.find(u => u.role === 'kades') || userRows[0];
+    const operatorUser = userRows.find(u => u.role === 'operator') || userRows[0];
+
+    if (suratMasukRows.length > 0 && userRows.length >= 2) {
+      const insertDisposisi = db.prepare(`
+        INSERT INTO disposisi (surat_masuk_id, dari_user_id, kepada_user_id, instruksi, status, catatan, batas_waktu)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      // Disposisi untuk surat pertama: admin → operator, status Menunggu
+      if (suratMasukRows[0]) {
+        insertDisposisi.run(suratMasukRows[0].id, adminUser.id, operatorUser.id, 'Mohon ditindaklanjuti undangan Musrenbang.', 'Menunggu', null, '2024-06-20');
+        // Update surat menjadi Diproses
+        db.prepare("UPDATE surat_masuk SET status = 'Diproses' WHERE id = ?").run(suratMasukRows[0].id);
+      }
+
+      // Disposisi untuk surat kedua: admin → kades, status Disetujui
+      if (suratMasukRows[1]) {
+        insertDisposisi.run(suratMasukRows[1].id, adminUser.id, kadesUser.id, 'Mohon persetujuan untuk mengikuti lomba desa.', 'Disetujui', 'Setuju, segera persiapkan.', '2024-06-18');
+        db.prepare("UPDATE surat_masuk SET status = 'Diproses' WHERE id = ?").run(suratMasukRows[1].id);
+      }
+
+      console.log('✅ Sample disposisi seeded');
+    } else {
+      console.log('⚠️ Disposisi seed skipped: insufficient data');
+    }
+  }
+
+  console.log('✅ Seed complete');
 }
 
 // Initialize and seed

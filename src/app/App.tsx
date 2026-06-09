@@ -17,8 +17,17 @@ import { KelolaUser } from './components/KelolaUser';
 import { ProfilDesa } from './components/ProfilDesa';
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userRole, setUserRole] = useState('operator');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!localStorage.getItem('token'));
+  const [userRole, setUserRole] = useState<string>(() => {
+    const savedUser = localStorage.getItem('user');
+    if (!savedUser) return 'operator';
+    try {
+      const parsed = JSON.parse(savedUser);
+      return parsed?.role || 'operator';
+    } catch {
+      return 'operator';
+    }
+  });
   const [activePage, setActivePage] = useState('dashboard');
 
   const handleLogin = (role: string, token: string, user: { nama: string; email: string; role: string }) => {
@@ -30,6 +39,8 @@ export default function App() {
 
   const handleLogout = () => {
     if (confirm('Yakin ingin keluar dari aplikasi?')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
       setIsLoggedIn(false);
       setUserRole('operator');
       setActivePage('dashboard');
@@ -41,6 +52,7 @@ export default function App() {
       case 'admin':
         return 'Admin';
       case 'kades':
+      case 'pimpinan':
         return 'Kepala Desa';
       default:
         return 'Operator';
@@ -48,10 +60,18 @@ export default function App() {
   };
 
   const getUserName = (role: string) => {
+    const saved = localStorage.getItem('user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.nama) return parsed.nama;
+      } catch {}
+    }
     switch (role) {
       case 'admin':
         return 'Admin Sistem';
       case 'kades':
+      case 'pimpinan':
         return 'Kepala Desa';
       default:
         return 'Operator Desa';
@@ -63,7 +83,7 @@ export default function App() {
 
     switch (page) {
       case 'dashboard':
-        return userRole === 'admin' ? 'Dashboard Admin' : userRole === 'operator' ? 'Dashboard Operator' : role === 'kades' ? 'Dashboard Pimpinan' : `${rolePrefix} - Dashboard`;
+        return userRole === 'admin' ? 'Dashboard Admin' : userRole === 'operator' ? 'Dashboard Operator' : (role === 'kades' || role === 'pimpinan') ? 'Dashboard Pimpinan' : `${rolePrefix} - Dashboard`;
 
       case 'surat-masuk':
         return `${rolePrefix} - Surat Masuk`;
@@ -89,7 +109,7 @@ export default function App() {
   const getPageSubtitle = (page: string) => {
     switch (page) {
       case 'dashboard':
-        return userRole === 'kades' ? 'Kepala Desa' : undefined;
+        return (userRole === 'kades' || userRole === 'pimpinan') ? 'Kepala Desa' : undefined;
       default:
         return undefined;
     }
@@ -113,7 +133,7 @@ export default function App() {
         />
 
         <main className="flex-1 overflow-y-auto bg-gray-50">
-{activePage === 'dashboard' && userRole === 'kades' && <DashboardPimpinan />}
+{activePage === 'dashboard' && (userRole === 'kades' || userRole === 'pimpinan') && <DashboardPimpinan />}
           {activePage === 'dashboard' && userRole === 'admin' && <DashboardAdmin />}
           {activePage === 'dashboard' && userRole === 'operator' && <DashboardOperator />}
 

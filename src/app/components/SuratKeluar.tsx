@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Pencil, Trash2, Eye, X, Download, AlertCircle } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Eye, X, Download, AlertCircle, Upload, RefreshCw } from 'lucide-react';
 
 interface SuratKeluarItem {
   id: number;
   nomor_surat: string;
   tujuan_surat: string;
-perihal: string;
+  perihal: string;
   tanggal_surat: string;
+  klasifikasi_id?: number;
   klasifikasi_kode?: string;
   klasifikasi_nama?: string;
   lampiran: string | null;
@@ -15,9 +16,11 @@ perihal: string;
 
 export function SuratKeluar() {
   const [items, setItems] = useState<SuratKeluarItem[]>([]);
+  const [klasifikasiList, setKlasifikasiList] = useState<{ id: number; kode: string; nama: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [filterKlasifikasi, setFilterKlasifikasi] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<SuratKeluarItem | null>(null);
@@ -30,18 +33,93 @@ export function SuratKeluar() {
     tanggal_surat: '',
     klasifikasi_id: '',
   });
+  const [lampiranFile, setLampiranFile] = useState<File | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
 
   const token = localStorage.getItem('token') || '';
 
   useEffect(() => {
     loadData();
+    loadKlasifikasi();
+  }, [search, filterKlasifikasi]);
+
+  // Auto-refresh: polling every 15 detik (SSE tidak tersedia di backend)
+  useEffect(() => {
+    const iv = setInterval(loadData, 15000);
+    return () => clearInterval(iv);
   }, [search]);
+
+  // Auto-save effect: debounce form changes and auto-save every 2 seconds
+  useEffect(() => {
+    if (!editingId || !showForm) return; // Only auto-save when editing
+    
+    // Clear previous timer
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    
+    // Set new timer for auto-save
+    const timer = setTimeout(async () => {
+      if (!editingId) return;
+      
+      setAutoSaveStatus('saving');
+      try {
+        const body = new FormData();
+        body.append('nomor_surat', form.nomor_surat);
+        body.append('tujuan_surat', form.tujuan_surat);
+        body.append('perihal', form.perihal);
+        body.append('tanggal_surat', form.tanggal_surat);
+        if (form.klasifikasi_id) body.append('klasifikasi_id', form.klasifikasi_id);
+        if (lampiranFile) body.append('lampiran', lampiranFile);
+
+        const res = await fetch(`/api/surat-keluar/${editingId}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` },
+          body,
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          setAutoSaveStatus('saved');
+          // Tidak refresh tabel agar tidak ganggu UX saat edit
+          // Reset status after 2 seconds
+          setTimeout(() => setAutoSaveStatus('idle'), 2000);
+        } else {
+          setAutoSaveStatus('idle');
+        }
+      } catch (err) {
+        console.error('Auto-save error:', err);
+        setAutoSaveStatus('idle');
+      }
+    }, 2000); // Debounce for 2 seconds
+    // Note: tidak panggil loadData() di sini agar tidak mengganggu UX saat mengedit
+    
+    setAutoSaveTimer(timer);
+    return () => clearTimeout(timer);
+  }, [form, lampiranFile, editingId, showForm, token]);
+
+  const loadKlasifikasi = async () => {
+    try {
+      const token = localStorage.getItem('token') || '';
+      if (!token) return;
+      const res = await fetch('/api/klasifikasi', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setKlasifikasiList(data.data);
+    } catch {
+      // ignore kelasifikasi loading errors for now
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const params = search ? `?search=${encodeURIComponent(search)}` : '';
-      const res = await fetch(`/api/surat-keluar${params}`, {
+      const queryParams = new URLSearchParams();
+      if (search) queryParams.append('search', search);
+      if (filterKlasifikasi) queryParams.append('klasifikasi', filterKlasifikasi);
+      const qs = queryParams.toString();
+      const res = await fetch(`/api/surat-keluar${qs ? `?${qs}` : ''}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -54,14 +132,38 @@ export function SuratKeluar() {
     }
   };
 
+  const generateNomor = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch('/api/surat-keluar/generate-nomor', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setForm((prev) => ({ ...prev, nomor_surat: data.data.nomor }));
+      } else {
+        setError(data.message || 'Gagal generate nomor');
+      }
+    } catch {
+      setError('Gagal generate nomor');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     const body = new FormData();
     body.append('nomor_surat', form.nomor_surat);
     body.append('tujuan_surat', form.tujuan_surat);
     body.append('perihal', form.perihal);
     body.append('tanggal_surat', form.tanggal_surat);
     if (form.klasifikasi_id) body.append('klasifikasi_id', form.klasifikasi_id);
+    if (!form.nomor_surat && !editingId) {
+      body.append('generate_otomatis', 'true');
+    }
+    if (lampiranFile) body.append('lampiran', lampiranFile);
 
     try {
       const url = editingId ? `/api/surat-keluar/${editingId}` : '/api/surat-keluar';
@@ -72,12 +174,13 @@ export function SuratKeluar() {
         setShowForm(false);
         setEditingId(null);
         setForm({ nomor_surat: '', tujuan_surat: '', perihal: '', tanggal_surat: '', klasifikasi_id: '' });
+        setLampiranFile(null);
         loadData();
       } else {
-        alert(data.message || 'Gagal menyimpan');
+        setError(data.message || 'Gagal menyimpan');
       }
     } catch {
-      alert('Terjadi kesalahan');
+      setError('Terjadi kesalahan');
     }
   };
 
@@ -93,16 +196,17 @@ export function SuratKeluar() {
         setDeleteItem(null);
         loadData();
       } else {
-        alert(data.message || 'Gagal menghapus');
+        setError(data.message || 'Gagal menghapus');
       }
     } catch {
-      alert('Terjadi kesalahan');
+      setError('Terjadi kesalahan');
     }
   };
 
   const openAdd = () => {
     setEditingId(null);
     setForm({ nomor_surat: '', tujuan_surat: '', perihal: '', tanggal_surat: '', klasifikasi_id: '' });
+    setLampiranFile(null);
     setShowForm(true);
   };
 
@@ -113,8 +217,9 @@ export function SuratKeluar() {
       tujuan_surat: item.tujuan_surat,
       perihal: item.perihal,
       tanggal_surat: item.tanggal_surat,
-      klasifikasi_id: '',
+      klasifikasi_id: item.klasifikasi_id ? item.klasifikasi_id.toString() : '',
     });
+    setLampiranFile(null);
     setShowForm(true);
   };
 
@@ -144,15 +249,29 @@ export function SuratKeluar() {
       </div>
 
       <div className="bg-white rounded-lg shadow p-4">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari nomor, tujuan, perihal..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari nomor, tujuan, perihal..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+          <select
+            value={filterKlasifikasi}
+            onChange={(e) => setFilterKlasifikasi(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+          >
+            <option value="">Semua Klasifikasi</option>
+            {klasifikasiList.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.kode} - {item.nama}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -204,18 +323,44 @@ export function SuratKeluar() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto p-4 z-40">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-auto max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-6 border-b">
-              <h3 className="text-xl font-semibold text-gray-900">{editingId ? 'Edit' : 'Tambah'} Surat Keluar</h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-xl font-semibold text-gray-900">{editingId ? 'Edit' : 'Tambah'} Surat Keluar</h3>
+                {editingId && autoSaveStatus === 'saving' && (
+                  <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded animate-pulse">Menyimpan...</span>
+                )}
+                {editingId && autoSaveStatus === 'saved' && (
+                  <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">✓ Tersimpan</span>
+                )}
+              </div>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor Surat</label>
-                <input type="text" value={form.nomor_surat} onChange={(e) => setForm({ ...form, nomor_surat: e.target.value })} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
-              </div>
-              <div>
+            <form onSubmit={handleSubmit} className="flex h-full flex-col">
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nomor Surat</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={form.nomor_surat}
+                      onChange={(e) => setForm({ ...form, nomor_surat: e.target.value })}
+                      placeholder={!editingId ? 'Kosongkan untuk generate otomatis' : ''}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                    {!editingId && (
+                      <button type="button" onClick={generateNomor} disabled={generating} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 flex items-center gap-1">
+                        <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+                        Generate
+                      </button>
+                    )}
+                  </div>
+                  {!editingId && (
+                    <p className="text-xs text-gray-500">Biarkan kosong untuk nomor otomatis.</p>
+                  )}
+                </div>
+                <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tujuan Surat</label>
                 <input type="text" value={form.tujuan_surat} onChange={(e) => setForm({ ...form, tujuan_surat: e.target.value })} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
@@ -227,14 +372,50 @@ export function SuratKeluar() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Surat</label>
                 <input type="date" value={form.tanggal_surat} onChange={(e) => setForm({ ...form, tanggal_surat: e.target.value })} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
-              <div className="flex justify-end gap-3 pt-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Klasifikasi</label>
+                <select
+                  value={form.klasifikasi_id}
+                  onChange={(e) => setForm({ ...form, klasifikasi_id: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  <option value="">Pilih klasifikasi</option>
+                  {klasifikasiList.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.kode} - {item.nama}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Lampiran</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    id="lampiran-keluar"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setLampiranFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                  <label htmlFor="lampiran-keluar" className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <Upload className="w-4 h-4" />
+                    {lampiranFile ? lampiranFile.name : 'Pilih File'}
+                  </label>
+                  {lampiranFile && (
+                    <button type="button" onClick={() => setLampiranFile(null)} className="text-sm text-red-600 hover:underline">Hapus</button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Format: PDF/JPG/PNG, Maks 5MB</p>
+              </div>
+              <div className="border-t p-4 bg-white flex justify-end gap-3">
                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Batal</button>
                 <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Simpan</button>
               </div>
+            </div>
             </form>
           </div>
-        </div>
-      )}
+          </div>
+        )}
 
       {detailItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
@@ -250,7 +431,7 @@ export function SuratKeluar() {
               <p className="text-sm"><span className="text-gray-600">Tanggal:</span> {fmtDate(detailItem.tanggal_surat)}</p>
               <p className="text-sm"><span className="text-gray-600">Klasifikasi:</span> {detailItem.klasifikasi_kode || '-'} {detailItem.klasifikasi_nama || ''}</p>
               {detailItem.lampiran && (
-                <a href={`http://localhost:5000${detailItem.lampiran}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline">
+                <a href={detailItem.lampiran} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline">
                   <Download className="w-4 h-4" />Unduh Lampiran
                 </a>
               )}

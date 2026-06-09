@@ -51,7 +51,7 @@ const getMenuItems = (role: string) => {
 
   if (role === 'admin') {
     return [...baseMenu, ...adminMenu, ...settingsMenu];
-  } else if (role === 'kades') {
+  } else if (role === 'kades' || role === 'pimpinan') {
     return [...baseMenu, ...kadesMenu, ...settingsMenu];
   } else {
     return [...baseMenu, ...operatorMenu, ...settingsMenu];
@@ -73,14 +73,16 @@ export function Sidebar({ activePage, onPageChange, userRole }: SidebarProps) {
   };
 
   const getUserInfo = () => {
-    switch (userRole) {
-      case 'admin':
-        return { nama: 'Admin Sistem', jabatan: 'Admin', desa: 'Desa Karangasem' };
-       case 'kades':
-         return { nama: 'Kepala Desa', jabatan: 'Kepala Desa', desa: 'Desa Karangasem' };
-       default:
-         return { nama: 'Operator Desa', jabatan: 'Operator', desa: 'Desa Karangasem' };
+    const saved = localStorage.getItem('user');
+    let nama = userRole === 'admin' ? 'Admin Sistem' : userRole === 'kades' || userRole === 'pimpinan' ? 'Kepala Desa' : 'Operator Desa';
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.nama) nama = parsed.nama;
+      } catch {}
     }
+    const jabatan = userRole === 'admin' ? 'Admin' : userRole === 'kades' || userRole === 'pimpinan' ? 'Kepala Desa' : 'Operator';
+    return { nama, jabatan, desa: 'Desa Karangasem' };
   };
 
   const userInfo = getUserInfo();
@@ -91,7 +93,7 @@ export function Sidebar({ activePage, onPageChange, userRole }: SidebarProps) {
       <div className="p-4 border-b border-blue-800">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center border-2 border-white">
-            <img src="/e-arsip-desa/public/logo.png" alt="Logo Kabupaten" className="w-10 h-10 rounded-full object-cover" />
+            <img src="/logo.png" alt="Logo Kabupaten" className="w-10 h-10 rounded-full object-cover" />
           </div>
           <div>
             <h2 className="font-bold text-white text-sm">E-ARSIP DESA</h2>

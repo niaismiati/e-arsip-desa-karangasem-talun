@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Calendar, Mail, Send, BarChart3, Eye } from 'lucide-react';
+import { FileText, Download, Calendar, Mail, Send, BarChart3 } from 'lucide-react';
 
 interface RekapItem {
   klasifikasi_id: number;
@@ -40,6 +40,15 @@ export function Laporan() {
     loadStatistik();
   }, [tahun]);
 
+  // Auto-refresh polling
+  useEffect(() => {
+    const iv = setInterval(() => {
+      loadRekap();
+      loadStatistik();
+    }, 30000);
+    return () => clearInterval(iv);
+  }, [tahun, bulan, jenis]);
+
   const loadRekap = async () => {
     setLoading(true);
     try {
@@ -78,6 +87,24 @@ export function Laporan() {
     }
   };
 
+  const exportRekapCsv = () => {
+    if (!rekapData.length) return;
+    const rows = [
+      ['Kode', 'Klasifikasi', 'Surat Masuk', 'Surat Keluar', 'Total'],
+      ...rekapData.map((item) => [item.kode, item.nama, String(item.surat_masuk), String(item.surat_keluar), String(item.total)]),
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `laporan-rekap-${tahun}${bulan ? `-${bulan}` : ''}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const getTotalMasuk = () => rekapData.reduce((sum, item) => sum + item.surat_masuk, 0);
   const getTotalKeluar = () => rekapData.reduce((sum, item) => sum + item.surat_keluar, 0);
   const getGrandTotal = () => rekapData.reduce((sum, item) => sum + item.total, 0);
@@ -101,6 +128,9 @@ export function Laporan() {
           <h2 className="text-2xl font-bold text-gray-900">Laporan</h2>
           <p className="text-sm text-gray-600">Laporan arsip surat desa</p>
         </div>
+        <button onClick={exportRekapCsv} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+          <Download className="w-4 h-4" /> Simpan Laporan
+        </button>
       </div>
 
       {/* Tab Options */}

@@ -15,13 +15,19 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const fetchWithTimeout = (url: string, options: RequestInit, timeoutMs = 10000) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetchWithTimeout('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -35,7 +41,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         setError(data.message || 'Login gagal');
       }
     } catch (err) {
-      setError('Terjadi kesalahan. Silakan coba lagi.');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('Koneksi lambat. Silakan coba lagi.');
+      } else {
+        setError('Terjadi kesalahan. Silakan coba lagi.');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,22 +53,23 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     setError('');
 
     if (password !== confirmPassword) {
       setError('Password tidak cocok!');
+      setLoading(false);
       return;
     }
 
     if (password.length < 6) {
       setError('Password minimal 6 karakter.');
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
+      const response = await fetchWithTimeout('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nama: name, email, password, role }),
@@ -72,7 +83,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         setError(data.message || 'Registrasi gagal');
       }
     } catch (err) {
-      setError('Terjadi kesalahan. Silakan coba lagi.');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('Koneksi lambat. Silakan coba lagi.');
+      } else {
+        setError('Terjadi kesalahan. Silakan coba lagi.');
+      }
     } finally {
       setLoading(false);
     }
@@ -85,7 +100,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           {/* Logo and Title */}
           <div className="flex flex-col items-center mb-8">
             <img
-              src="/e-arsip-desa/public/logo.png"
+              src="/logo.png"
               alt="Logo Kabupaten"
               className="w-20 h-20 mb-4 object-contain"
             />
@@ -131,15 +146,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
+                  Email atau Username
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="email@desa.id"
+                    placeholder="email@desa.id / username"
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
                     required
                   />
@@ -170,6 +185,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               >
                 {loading ? 'Memproses...' : 'Masuk'}
               </button>
+<p className="mt-3 text-xs text-gray-500">
+                 Akun default: admin@karangasem.desa.id / password123
+               </p>
             </form>
           )}
 
@@ -275,18 +293,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                     <Building2 className="w-5 h-5 text-gray-600" />
                     <span className="text-sm text-gray-700">Kepala Desa</span>
                   </label>
-                  <label className="flex items-center gap-3 p-3 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="role"
-                      value="admin"
-                      checked={role === 'admin'}
-                      onChange={(e) => setRole(e.target.value)}
-                      className="w-4 h-4 text-indigo-600"
-                    />
-                    <Building2 className="w-5 h-5 text-gray-600" />
-                    <span className="text-sm text-gray-700">Admin</span>
-                  </label>
+                  {/* Admin hanya bisa dibuat oleh admin via halaman Kelola Pengguna */}
                 </div>
               </div>
 

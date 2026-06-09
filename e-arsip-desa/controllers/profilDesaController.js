@@ -53,6 +53,10 @@ exports.updateProfil = (req, res) => {
     );
 
     const updated = db.prepare('SELECT * FROM profil_desa WHERE id = ?').get(profil.id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'profil_desa', `Memperbarui profil desa ${updated.nama_desa}`);
+
     res.json({ success: true, message: 'Profil desa berhasil diperbarui.', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

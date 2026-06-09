@@ -33,3 +33,8 @@ coverage/
 
 # Build cache
 .pnpm-store/
+
+# Server logs
+*.txt
+server_out.txt
+server_err.txt

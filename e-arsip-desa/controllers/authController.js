@@ -20,8 +20,8 @@ exports.register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Semua field wajib diisi.' });
     }
 
-    if (!['admin', 'kades', 'operator'].includes(role)) {
-      return res.status(400).json({ success: false, message: 'Role tidak valid.' });
+    if (role !== 'operator') {
+      return res.status(400).json({ success: false, message: 'Registrasi hanya untuk role Operator. Hubungi admin untuk role lainnya.' });
     }
 
     if (password.length < 6) {

@@ -19,6 +19,14 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '..', 'dist')));
 
+// Request timeout middleware (30s)
+app.use((req, res, next) => {
+  res.setTimeout(30000, () => {
+    res.status(503).json({ success: false, message: 'Waktu permintaan habis. Silakan coba lagi.' });
+  });
+  next();
+});
+
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');

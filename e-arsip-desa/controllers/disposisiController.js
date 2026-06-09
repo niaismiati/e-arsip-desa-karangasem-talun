@@ -2,7 +2,7 @@ const db = require('../config/database');
 
 exports.getAll = (req, res) => {
   try {
-    const { status, surat_masuk_id } = req.query;
+    const { search, status, surat_masuk_id } = req.query;
     let sql = `
       SELECT d.*,
         sm.nomor_surat, sm.perihal as surat_perihal, sm.asal_surat,
@@ -16,6 +16,10 @@ exports.getAll = (req, res) => {
     `;
     const params = [];
 
+    if (search) {
+      sql += ` AND (sm.perihal LIKE ? OR sm.nomor_surat LIKE ? OR d.instruksi LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
     if (status) {
       sql += ` AND d.status = ?`;
       params.push(status);
@@ -60,7 +64,7 @@ exports.getById = (req, res) => {
 
 exports.create = (req, res) => {
   try {
-    const { surat_masuk_id, kepada_user_id, instruksi, batas_waktu } = req.body;
+    const { surat_masuk_id, kepada_user_id, instruksi, catatan, batas_waktu } = req.body;
 
     if (!surat_masuk_id || !kepada_user_id || !instruksi) {
       return res.status(400).json({ success: false, message: 'Field wajib: surat_masuk_id, kepada_user_id, instruksi.' });
@@ -77,12 +81,12 @@ exports.create = (req, res) => {
     }
 
     const result = db.prepare(`
-      INSERT INTO disposisi (surat_masuk_id, dari_user_id, kepada_user_id, instruksi, status, batas_waktu)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(surat_masuk_id, req.user.id, kepada_user_id, instruksi, 'Menunggu', batas_waktu || null);
+      INSERT INTO disposisi (surat_masuk_id, dari_user_id, kepada_user_id, instruksi, catatan, status, batas_waktu)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(surat_masuk_id, req.user.id, kepada_user_id, instruksi, catatan || null, 'Menunggu', batas_waktu || null);
 
     // Update surat masuk status
-    db.prepare("UPDATE surat_masuk SET status = 'Menunggu' WHERE id = ?").run(surat_masuk_id);
+    db.prepare("UPDATE surat_masuk SET status = 'Diproses' WHERE id = ?").run(surat_masuk_id);
 
     const newRow = db.prepare(`
       SELECT d.*,

@@ -164,17 +164,17 @@ exports.update = (req, res) => {
 
     db.prepare(`
       UPDATE surat_keluar
-      SET nomor_surat = COALESCE(?, nomor_surat),
-          tujuan_surat = COALESCE(?, tujuan_surat),
-          perihal = COALESCE(?, perihal),
-          tanggal_surat = COALESCE(?, tanggal_surat),
-          klasifikasi_id = COALESCE(?, klasifikasi_id),
-          lampiran = COALESCE(?, lampiran)
+      SET nomor_surat = ?,
+          tujuan_surat = ?,
+          perihal = ?,
+          tanggal_surat = ?,
+          klasifikasi_id = ?,
+          lampiran = ?
       WHERE id = ?
     `).run(
-      nomor_surat || null, tujuan_surat || null, perihal || null,
-      tanggal_surat || null,
-      klasifikasi_id !== undefined ? klasifikasi_id : null,
+      nomor_surat, tujuan_surat, perihal,
+      tanggal_surat,
+      klasifikasi_id || null,
       lampiran || null, id
     );
 
@@ -184,6 +184,9 @@ exports.update = (req, res) => {
       LEFT JOIN klasifikasi k ON sk.klasifikasi_id = k.id
       WHERE sk.id = ?
     `).get(id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'surat_keluar', `Memperbarui surat keluar: ${updated.perihal}`);
 
     res.json({ success: true, message: 'Surat keluar berhasil diperbarui.', data: updated });
   } catch (error) {
@@ -200,6 +203,10 @@ exports.delete = (req, res) => {
     }
 
     db.prepare('DELETE FROM surat_keluar WHERE id = ?').run(id);
+
+    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
+      .run(req.user.id, 'surat_keluar', `Menghapus surat keluar: ${existing.perihal}`);
+
     res.json({ success: true, message: 'Surat keluar berhasil dihapus.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

@@ -1,81 +1,58 @@
-import { Mail, Send, Clock, Archive, CheckCircle, XCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Mail, Send, Clock, Archive } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const statsCards = [
-  { id: 1, label: 'Surat Masuk', value: 28, icon: Mail, color: 'bg-indigo-500' },
-  { id: 2, label: 'Surat Keluar', value: 32, icon: Send, color: 'bg-green-500' },
-  { id: 3, label: 'Disposisi Baru', value: 5, icon: Clock, color: 'bg-orange-500' },
-  { id: 4, label: 'Total Arsip', value: 60, icon: Archive, color: 'bg-purple-500' },
-];
-
-const chartData = [
-  { bulan: 'Jan', masuk: 15, keluar: 12 },
-  { bulan: 'Feb', masuk: 22, keluar: 18 },
-  { bulan: 'Mar', masuk: 28, keluar: 25 },
-  { bulan: 'Apr', masuk: 35, keluar: 30 },
-  { bulan: 'Mei', masuk: 30, keluar: 28 },
-  { bulan: 'Jun', masuk: 28, keluar: 32 },
-];
-
-const recentLetters = [
-  {
-    id: 1,
-    perihal: 'Undangan Musrenbang Desa',
-    asal: 'Dinas PMD Kab. Pekalongan',
-    tanggal: '12/06/2024',
-    jenis: 'Masuk',
-    status: 'Menunggu'
-  },
-  {
-    id: 2,
-    perihal: 'Surat Pengantar Nikah',
-    asal: 'Warga: Budi Santoso',
-    tanggal: '11/06/2024',
-    jenis: 'Keluar',
-    status: 'Selesai'
-  },
-  {
-    id: 3,
-    perihal: 'Laporan Kegiatan Posyandu',
-    asal: 'Bidan Desa',
-    tanggal: '10/06/2024',
-    jenis: 'Masuk',
-    status: 'Diproses'
-  },
-  {
-    id: 4,
-    perihal: 'Surat Keterangan Domisili',
-    asal: 'Warga: Siti Aminah',
-    tanggal: '09/06/2024',
-    jenis: 'Keluar',
-    status: 'Selesai'
-  },
-  {
-    id: 5,
-    perihal: 'Undangan Rapat Koordinasi',
-    asal: 'Kecamatan Talun',
-    tanggal: '08/06/2024',
-    jenis: 'Masuk',
-    status: 'Selesai'
-  },
-];
-
-const pendingDispositions = [
-  {
-    id: 1,
-    perihal: 'Undangan Musrenbang Desa',
-    asal: 'Dinas PMD Kab. Pekalongan',
-    tanggal: '12/06/2024'
-  },
-  {
-    id: 2,
-    perihal: 'Pemberitahuan Lomba Desa',
-    asal: 'Kecamatan Talun',
-    tanggal: '11/06/2024'
-  },
-];
-
 export function Dashboard() {
+  const [stats, setStats] = useState({
+    suratMasuk: 0,
+    suratKeluar: 0,
+    disposisi: 0,
+    totalArsip: 0,
+  });
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [recentLetters, setRecentLetters] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem('token') || '';
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [statsRes, chartRes, recentRes] = await Promise.all([
+        fetch('/api/dashboard/stats', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch('/api/dashboard/chart', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch('/api/dashboard/recent-letters', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      ]);
+
+      if (statsRes.success) {
+        setStats({
+          suratMasuk: statsRes.data.surat_masuk,
+          suratKeluar: statsRes.data.surat_keluar,
+          disposisi: statsRes.data.disposisi_baru,
+          totalArsip: statsRes.data.total_arsip,
+        });
+      }
+
+      if (chartRes.success) setChartData(chartRes.data);
+
+      if (recentRes.success) setRecentLetters(recentRes.data);
+    } catch (err) {
+      console.error('Error loading dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const statsCards = [
+    { id: 1, label: 'Surat Masuk', value: stats.suratMasuk, icon: Mail, color: 'bg-indigo-500' },
+    { id: 2, label: 'Surat Keluar', value: stats.suratKeluar, icon: Send, color: 'bg-green-500' },
+    { id: 3, label: 'Disposisi Baru', value: stats.disposisi, icon: Clock, color: 'bg-orange-500' },
+    { id: 4, label: 'Total Arsip', value: stats.totalArsip, icon: Archive, color: 'bg-purple-500' },
+  ];
+
   return (
     <div className="p-6 space-y-6">
       {/* Stats Cards */}
@@ -117,29 +94,18 @@ export function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Pending Dispositions */}
+        {/* Summary */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Disposisi Menunggu
-          </h3>
-          <div className="space-y-3">
-            {pendingDispositions.map((disp) => (
-              <div key={disp.id} className="border border-gray-200 rounded-lg p-3">
-                <p className="text-sm font-medium text-gray-900 mb-1">{disp.perihal}</p>
-                <p className="text-xs text-gray-600 mb-2">{disp.asal}</p>
-                <p className="text-xs text-gray-500 mb-3">{disp.tanggal}</p>
-                <div className="flex gap-2">
-                    <button className="flex-1 bg-blue-600 text-white text-xs py-1.5 rounded hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1">
-                     <CheckCircle className="w-3 h-3" />
-                     Setujui
-                    </button>
-                  <button className="flex-1 bg-red-500 text-white text-xs py-1.5 rounded hover:bg-red-600 transition-colors flex items-center justify-center gap-1">
-                    <XCircle className="w-3 h-3" />
-                    Tolak
-                  </button>
-                </div>
-              </div>
-            ))}
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Ringkasan</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b">
+              <span className="text-gray-600">Total Surat</span>
+              <span className="text-2xl font-bold text-gray-900">{stats.totalArsip}</span>
+            </div>
+            <div className="flex justify-between items-center pb-3 border-b">
+              <span className="text-gray-600">Menunggu Disposisi</span>
+              <span className="text-2xl font-bold text-orange-500">{stats.disposisi}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -147,9 +113,7 @@ export function Dashboard() {
       {/* Recent Letters Table */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Surat Terbaru
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900">Surat Terbaru</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -163,34 +127,40 @@ export function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {recentLetters.map((letter) => (
-                <tr key={letter.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900">{letter.perihal}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{letter.asal}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{letter.tanggal}</td>
-                  <td className="px-6 py-4">
+              {loading ? (
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Memuat...</td></tr>
+              ) : recentLetters.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Tidak ada data surat</td></tr>
+              ) : (
+                recentLetters.map((letter) => (
+                  <tr key={`${letter.jenis}-${letter.id}`} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-900">{letter.perihal}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{letter.asal_tujuan}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{new Date(letter.tanggal).toLocaleDateString('id-ID')}</td>
+                    <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         letter.jenis === 'Masuk'
                           ? 'bg-indigo-100 text-indigo-800'
-                           : 'bg-green-100 text-green-800'
+                          : 'bg-green-100 text-green-800'
                       }`}>
-                      {letter.jenis === 'Masuk' ? <Mail className="w-3 h-3" /> : <Send className="w-3 h-3" />}
-                      {letter.jenis}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
+                        {letter.jenis === 'Masuk' ? <Mail className="w-3 h-3" /> : <Send className="w-3 h-3" />}
+                        {letter.jenis}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
                       <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         letter.status === 'Selesai'
-                           ? 'bg-green-100 text-green-800'
+                          ? 'bg-green-100 text-green-800'
                           : letter.status === 'Menunggu'
                           ? 'bg-orange-100 text-orange-800'
-                          : 'bg-indigo-100 text-indigo-800'
+                          : 'bg-blue-100 text-blue-800'
                       }`}>
-                       {letter.status}
-                     </span>
-                  </td>
-                </tr>
-              ))}
+                        {letter.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

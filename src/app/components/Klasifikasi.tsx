@@ -68,10 +68,10 @@ export function Klasifikasi() {
         setForm({ kode: '', nama: '', keterangan: '' });
         loadData();
       } else {
-        alert(data.message || 'Gagal menyimpan');
+        setError(data.message || 'Gagal menyimpan');
       }
     } catch {
-      alert('Terjadi kesalahan');
+      setError('Terjadi kesalahan');
     }
   };
 
@@ -87,10 +87,10 @@ export function Klasifikasi() {
         setDeleteItem(null);
         loadData();
       } else {
-        alert(data.message || 'Gagal menghapus');
+        setError(data.message || 'Gagal menghapus');
       }
     } catch {
-      alert('Terjadi kesalahan');
+      setError('Terjadi kesalahan');
     }
   };
 
