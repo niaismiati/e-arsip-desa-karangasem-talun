@@ -6,9 +6,9 @@ const upload = require('../middleware/upload');
 
 router.get('/', verifyToken, checkRole(['admin', 'operator', 'kades']), suratMasukController.getAll);
 router.get('/:id', verifyToken, suratMasukController.getById);
-router.post('/', verifyToken, checkRole(['admin', 'operator', 'kades']), upload.single('lampiran'), suratMasukController.create);
-router.put('/:id', verifyToken, checkRole(['admin', 'operator', 'kades']), upload.single('lampiran'), suratMasukController.update);
-router.delete('/:id', verifyToken, checkRole(['admin']), suratMasukController.delete);
+router.post('/', verifyToken, checkRole(['admin', 'operator']), upload.single('lampiran'), suratMasukController.create);
+router.put('/:id', verifyToken, checkRole(['admin', 'operator']), upload.single('lampiran'), suratMasukController.update);
+router.delete('/:id', verifyToken, checkRole(['admin', 'operator']), suratMasukController.delete);
 
 module.exports = router;
 

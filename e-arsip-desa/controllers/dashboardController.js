@@ -1,11 +1,11 @@
 const db = require('../config/database');
 
-exports.getStats = (req, res) => {
+exports.getStats = async (req, res) => {
   try {
-    const suratMasukTotal = db.prepare('SELECT COUNT(*) as total FROM surat_masuk').get();
-    const suratKeluarTotal = db.prepare('SELECT COUNT(*) as total FROM surat_keluar').get();
-    const disposisiBaru = db.prepare("SELECT COUNT(*) as total FROM disposisi WHERE status = 'Menunggu'").get();
-    const totalArsip = db.prepare('SELECT COUNT(*) as total FROM (SELECT id FROM surat_masuk UNION ALL SELECT id FROM surat_keluar)').get();
+    const suratMasukTotal = await db.get('SELECT COUNT(*) as total FROM surat_masuk');
+    const suratKeluarTotal = await db.get('SELECT COUNT(*) as total FROM surat_keluar');
+    const disposisiBaru = await db.get("SELECT COUNT(*) as total FROM disposisi WHERE status = 'Menunggu'");
+    const totalArsip = await db.get('SELECT COUNT(*) as total FROM (SELECT id FROM surat_masuk UNION ALL SELECT id FROM surat_keluar) as sub');
 
     res.json({
       success: true,
@@ -21,7 +21,7 @@ exports.getStats = (req, res) => {
   }
 };
 
-exports.getChartData = (req, res) => {
+exports.getChartData = async (req, res) => {
   try {
     const now = new Date();
     const result = [];
@@ -32,15 +32,17 @@ exports.getChartData = (req, res) => {
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const monthName = d.toLocaleString('id-ID', { month: 'short' });
 
-      const masuk = db.prepare(`
-        SELECT COUNT(*) as total FROM surat_masuk
-        WHERE strftime('%Y', tanggal_surat) = ? AND strftime('%m', tanggal_surat) = ?
-      `).get(String(year), month);
+      const masuk = await db.get(
+        `SELECT COUNT(*) as total FROM surat_masuk
+         WHERE YEAR(tanggal_surat) = ? AND MONTH(tanggal_surat) = ?`,
+        [year, parseInt(month)]
+      );
 
-      const keluar = db.prepare(`
-        SELECT COUNT(*) as total FROM surat_keluar
-        WHERE strftime('%Y', tanggal_surat) = ? AND strftime('%m', tanggal_surat) = ?
-      `).get(String(year), month);
+      const keluar = await db.get(
+        `SELECT COUNT(*) as total FROM surat_keluar
+         WHERE YEAR(tanggal_surat) = ? AND MONTH(tanggal_surat) = ?`,
+        [year, parseInt(month)]
+      );
 
       result.push({
         bulan: monthName.charAt(0).toUpperCase() + monthName.slice(1),
@@ -55,21 +57,21 @@ exports.getChartData = (req, res) => {
   }
 };
 
-exports.getRecentLetters = (req, res) => {
+exports.getRecentLetters = async (req, res) => {
   try {
-    const masuk = db.prepare(`
+    const masuk = await db.all(`
       SELECT sm.id, sm.perihal, sm.asal_surat as asal_tujuan, sm.tanggal_surat as tanggal, 'Masuk' as jenis, sm.status
       FROM surat_masuk sm
       ORDER BY sm.created_at DESC
       LIMIT 5
-    `).all();
+    `);
 
-    const keluar = db.prepare(`
+    const keluar = await db.all(`
       SELECT sk.id, sk.perihal, sk.tujuan_surat as asal_tujuan, sk.tanggal_surat as tanggal, 'Keluar' as jenis, 'Selesai' as status
       FROM surat_keluar sk
       ORDER BY sk.created_at DESC
       LIMIT 5
-    `).all();
+    `);
 
     const combined = [...masuk, ...keluar]
       .sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal))
@@ -81,9 +83,9 @@ exports.getRecentLetters = (req, res) => {
   }
 };
 
-exports.getPendingDisposisi = (req, res) => {
+exports.getPendingDisposisi = async (req, res) => {
   try {
-    const rows = db.prepare(`
+    const rows = await db.all(`
       SELECT d.id, d.instruksi, d.status, d.created_at, d.batas_waktu,
         sm.id as surat_masuk_id, sm.nomor_surat, sm.perihal, sm.asal_surat, sm.tanggal_terima,
         dari.nama as dari_nama
@@ -93,7 +95,7 @@ exports.getPendingDisposisi = (req, res) => {
       WHERE d.status = 'Menunggu'
       ORDER BY d.created_at DESC
       LIMIT 5
-    `).all();
+    `);
 
     res.json({ success: true, data: rows });
   } catch (error) {
@@ -101,20 +103,19 @@ exports.getPendingDisposisi = (req, res) => {
   }
 };
 
-exports.getKlasifikasiSummary = (req, res) => {
+exports.getKlasifikasiSummary = async (req, res) => {
   try {
-    const klasifikasiList = db.prepare('SELECT id, kode, nama FROM klasifikasi ORDER BY kode ASC').all();
+    const klasifikasiList = await db.all('SELECT id, kode, nama FROM klasifikasi ORDER BY kode ASC');
 
-    const result = klasifikasiList.map(k => {
-      const masuk = db.prepare('SELECT COUNT(*) as total FROM surat_masuk WHERE klasifikasi_id = ?').get(k.id);
-      const keluar = db.prepare('SELECT COUNT(*) as total FROM surat_keluar WHERE klasifikasi_id = ?').get(k.id);
-
-      return {
-        kode: k.kode,
-        nama: k.nama,
-        count: masuk.total + keluar.total
-      };
-    }).filter(k => k.count > 0);
+    const result = [];
+    for (const k of klasifikasiList) {
+      const masuk = await db.get('SELECT COUNT(*) as total FROM surat_masuk WHERE klasifikasi_id = ?', [k.id]);
+      const keluar = await db.get('SELECT COUNT(*) as total FROM surat_keluar WHERE klasifikasi_id = ?', [k.id]);
+      const count = masuk.total + keluar.total;
+      if (count > 0) {
+        result.push({ kode: k.kode, nama: k.nama, count });
+      }
+    }
 
     res.json({ success: true, data: result });
   } catch (error) {
@@ -122,19 +123,18 @@ exports.getKlasifikasiSummary = (req, res) => {
   }
 };
 
-exports.getAktivitas = (req, res) => {
+exports.getAktivitas = async (req, res) => {
   try {
-    const rows = db.prepare(`
+    const rows = await db.all(`
       SELECT a.*, u.nama as user_nama
       FROM aktivitas a
       LEFT JOIN users u ON a.user_id = u.id
       ORDER BY a.created_at DESC
       LIMIT 10
-    `).all();
+    `);
 
     res.json({ success: true, data: rows });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-

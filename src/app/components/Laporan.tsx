@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Calendar, Mail, Send, BarChart3 } from 'lucide-react';
+import { FileText, Download, Calendar, Mail, Send, BarChart3, AlertCircle } from 'lucide-react';
+import { useSSE } from '../../hooks/useSSE';
 
 interface RekapItem {
   klasifikasi_id: number;
@@ -40,14 +41,16 @@ export function Laporan() {
     loadStatistik();
   }, [tahun]);
 
-  // Auto-refresh polling
-  useEffect(() => {
-    const iv = setInterval(() => {
-      loadRekap();
-      loadStatistik();
-    }, 30000);
-    return () => clearInterval(iv);
-  }, [tahun, bulan, jenis]);
+  const refreshLaporan = () => {
+    loadRekap();
+    loadStatistik();
+  };
+
+  useSSE([
+    'surat-masuk:created', 'surat-masuk:updated', 'surat-masuk:deleted',
+    'surat-keluar:created', 'surat-keluar:updated', 'surat-keluar:deleted',
+    'klasifikasi:created', 'klasifikasi:updated', 'klasifikasi:deleted',
+  ], refreshLaporan);
 
   const loadRekap = async () => {
     setLoading(true);
@@ -60,6 +63,10 @@ export function Laporan() {
       const res = await fetch(`/api/laporan/rekap?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setRekapData(data.data.rekap);
@@ -78,6 +85,10 @@ export function Laporan() {
       const res = await fetch(`/api/laporan/statistik-bulanan?tahun=${tahun}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setStatistikData(data.data);
@@ -119,6 +130,7 @@ export function Laporan() {
     <div className="p-6 space-y-6">
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-red-500" />
           <span className="text-sm text-red-700">{error}</span>
         </div>
       )}
@@ -128,7 +140,7 @@ export function Laporan() {
           <h2 className="text-2xl font-bold text-gray-900">Laporan</h2>
           <p className="text-sm text-gray-600">Laporan arsip surat desa</p>
         </div>
-        <button onClick={exportRekapCsv} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+        <button onClick={exportRekapCsv} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
           <Download className="w-4 h-4" /> Simpan Laporan
         </button>
       </div>
@@ -246,7 +258,7 @@ export function Laporan() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-hidden overflow-y-auto max-h-[80vh]">
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>

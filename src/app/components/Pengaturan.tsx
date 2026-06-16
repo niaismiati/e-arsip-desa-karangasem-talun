@@ -1,30 +1,108 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Settings, User, Bell, Lock, Database, Download, Upload, Trash2, Save } from 'lucide-react';
 
 interface AppSettings {
   tema: string;
- notifications: boolean;
+  notifications: boolean;
   autoLogout: number;
   backupOtomatis: string;
 }
 
+function loadSettings(): AppSettings {
+  try {
+    const saved = localStorage.getItem('appSettings');
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return { tema: 'light', notifications: true, autoLogout: 30, backupOtomatis: 'minggu' };
+}
+
 export function Pengaturan() {
-  const [settings, setSettings] = useState<AppSettings>({
-    tema: 'light',
-    notifications: true,
-    autoLogout: 30,
-    backupOtomatis: 'minggu',
-  });
+  const [settings, setSettings] = useState<AppSettings>(loadSettings);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+
+  // Terapkan tema secara real-time saat pengaturan berubah
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.tema === 'dark') {
+      root.classList.add('dark');
+    } else if (settings.tema === 'light') {
+      root.classList.remove('dark');
+    } else {
+      root.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    // Simpan ke localStorage + broadcast perubahan ke komponen lain
+    localStorage.setItem('appSettings', JSON.stringify(settings));
+    window.dispatchEvent(new CustomEvent('app:themeChange'));
+  }, [settings.tema]);
+
+  // Auto-save setiap kali pengaturan berubah
+  useEffect(() => {
+    localStorage.setItem('appSettings', JSON.stringify(settings));
+  }, [settings]);
+
+  // Auto Logout: pantau aktivitas pengguna
+  useEffect(() => {
+    if (settings.autoLogout === 0) return; // 0 = Tidak pernah
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        // Hapus token dan arahkan ke login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.reload();
+      }, settings.autoLogout * 60 * 1000);
+    };
+
+    // Event listener untuk aktivitas pengguna
+    const events = ['mousedown', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+    
+    resetTimer(); // Mulai timer
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, [settings.autoLogout]);
+
+  // Notifikasi Browser
+  const handleToggleNotif = async () => {
+    const newValue = !settings.notifications;
+    setSettings({ ...settings, notifications: newValue });
+    
+    if (newValue) {
+      if ('Notification' in window) {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          new Notification('E-Arsip Desa Karangasem', {
+            body: 'Notifikasi berhasil diaktifkan!',
+            icon: '/logo.png'
+          });
+        }
+      }
+    }
+  };
 
   const handleSave = async () => {
     setLoading(true);
     setMessage('');
     try {
-      // Simpan ke localStorage untuk demo
       localStorage.setItem('appSettings', JSON.stringify(settings));
+      window.dispatchEvent(new CustomEvent('app:themeChange'));
+      
+      // Kirim notifikasi test jika diaktifkan
+      if (settings.notifications && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Pengaturan Tersimpan', {
+          body: 'Pengaturan aplikasi berhasil disimpan!',
+          icon: '/logo.png'
+        });
+      }
+      
       setMessage('Pengaturan berhasil disimpan!');
       setTimeout(() => setMessage(''), 3000);
     } catch {
@@ -48,7 +126,7 @@ export function Pengaturan() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert('Gagal_export data');
+      alert('Gagal export data');
     }
   };
 
@@ -102,7 +180,7 @@ return (
               <p className="text-xs text-gray-500">Terima notifikasi untuk surat masuk terbaru</p>
             </div>
             <button
-              onClick={() => setSettings({ ...settings, notifications: !settings.notifications })}
+              onClick={handleToggleNotif}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                 settings.notifications ? 'bg-indigo-600' : 'bg-gray-200'
               }`}
@@ -170,7 +248,32 @@ return (
               <Download className="w-4 h-4" />
               Export Data
             </button>
-            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <button
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    try {
+                      const imported = JSON.parse(ev.target?.result as string);
+                      if (imported.settings) {
+                        setSettings(imported.settings);
+                        localStorage.setItem('appSettings', JSON.stringify(imported.settings));
+                        setMessage('Pengaturan berhasil diimpor!');
+                        setTimeout(() => setMessage(''), 3000);
+                      }
+                    } catch { alert('File tidak valid'); }
+                  };
+                  reader.readAsText(file);
+                };
+                input.click();
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
               <Upload className="w-4 h-4" />
               Import Data
             </button>
@@ -190,7 +293,14 @@ return (
               <p className="text-sm font-medium text-gray-700">Hapus Cache</p>
               <p className="text-xs text-gray-500">Hapus data cache sementara</p>
             </div>
-            <button className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50">
+            <button
+              onClick={() => {
+                localStorage.removeItem('appSettings');
+                setMessage('Cache berhasil dihapus!');
+                setTimeout(() => setMessage(''), 3000);
+              }}
+              className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50"
+            >
               Hapus Cache
             </button>
           </div>
@@ -202,12 +312,14 @@ return (
             <button
               onClick={() => {
                 if (confirm('Yakin ingin reset aplikasi? Semua pengaturan akan dikembalikan ke default.')) {
-                  setSettings({
+                  const defaults = {
                     tema: 'light',
                     notifications: true,
                     autoLogout: 30,
                     backupOtomatis: 'minggu',
-                  });
+                  };
+                  setSettings(defaults);
+                  localStorage.setItem('appSettings', JSON.stringify(defaults));
                   alert('Pengaturan telah direset ke default');
                 }
               }}

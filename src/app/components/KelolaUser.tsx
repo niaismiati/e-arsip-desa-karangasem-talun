@@ -1,5 +1,6 @@
-import { Plus, Edit, Trash2, X, User, AlertCircle, Key, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Edit, Trash2, X, User, AlertCircle, Key, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useSSE } from '../../hooks/useSSE';
 
 interface UserData {
   id: number;
@@ -19,15 +20,15 @@ export function KelolaUser() {
     nama: '',
     email: '',
     password: '',
+    konfirmasiPassword: '',
     role: 'operator'
   });
   const [resetPassword, setResetPassword] = useState<{ id: number; nama: string } | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showKonfirmasi, setShowKonfirmasi] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const token = localStorage.getItem('token') || '';
-
-  useEffect(() => {
-    loadUsers();
-  }, []);
 
   const loadUsers = async () => {
     try {
@@ -35,6 +36,10 @@ export function KelolaUser() {
       const res = await fetch('/api/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setUsers(data.data);
@@ -49,6 +54,14 @@ export function KelolaUser() {
     }
   };
 
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  useSSE([
+    'users:created', 'users:updated', 'users:deleted', 'users:toggle',
+  ], loadUsers);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -60,6 +73,11 @@ export function KelolaUser() {
 
     if (!editingId && !formData.password) {
       setError('Password wajib diisi untuk pengguna baru');
+      return;
+    }
+
+    if (formData.password && formData.password !== formData.konfirmasiPassword) {
+      setError('Password dan Konfirmasi Password tidak cocok');
       return;
     }
 
@@ -84,12 +102,16 @@ export function KelolaUser() {
         body: JSON.stringify(body)
       });
       
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         await loadUsers();
         setShowModal(false);
         setEditingId(null);
-        setFormData({ nama: '', email: '', password: '', role: 'operator' });
+        setFormData({ nama: '', email: '', password: '', konfirmasiPassword: '', role: 'operator' });
       } else {
         setError(data.message || 'Gagal menyimpan user');
       }
@@ -106,6 +128,10 @@ export function KelolaUser() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         await loadUsers();
@@ -123,6 +149,7 @@ export function KelolaUser() {
       nama: user.nama,
       email: user.email,
       password: '',
+      konfirmasiPassword: '',
       role: user.role
     });
     setShowModal(true);
@@ -142,6 +169,10 @@ export function KelolaUser() {
         },
         body: JSON.stringify({ password: newPassword })
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setResetPassword(null);
@@ -166,6 +197,10 @@ export function KelolaUser() {
           'Content-Type': 'application/json'
         }
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         await loadUsers();
@@ -214,7 +249,7 @@ export function KelolaUser() {
         <button
           onClick={() => {
             setEditingId(null);
-            setFormData({ nama: '', email: '', password: '', role: 'operator' });
+            setFormData({ nama: '', email: '', password: '', konfirmasiPassword: '', role: 'operator' });
             setShowModal(true);
           }}
           className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
@@ -225,7 +260,7 @@ export function KelolaUser() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow overflow-hidden overflow-y-auto max-h-[80vh]">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -310,7 +345,7 @@ export function KelolaUser() {
 
       {/* Modal Tambah/Edit Pengguna */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-xl font-semibold text-gray-900">
@@ -352,15 +387,46 @@ export function KelolaUser() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Password {editingId && '(kosongkan jika tidak ingin diubah)'}
                 </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  required={!editingId}
-                  minLength={6}
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    required={!editingId}
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
                 <p className="text-xs text-gray-500 mt-1">Minimal 6 karakter</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Konfirmasi Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showKonfirmasi ? "text" : "password"}
+                    value={formData.konfirmasiPassword}
+                    onChange={(e) => setFormData({...formData, konfirmasiPassword: e.target.value})}
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    required={!editingId}
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKonfirmasi(!showKonfirmasi)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showKonfirmasi ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -371,6 +437,7 @@ export function KelolaUser() {
                   onChange={(e) => setFormData({...formData, role: e.target.value})}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                 >
+                  <option value="">Pilih Role</option>
                   <option value="operator">Operator</option>
                   <option value="kades">Kepala Desa</option>
                   <option value="admin">Admin</option>
@@ -397,7 +464,7 @@ export function KelolaUser() {
       )}
       {/* Modal Reset Password */}
       {resetPassword && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-xl font-semibold text-gray-900">Reset Password</h3>
@@ -411,15 +478,24 @@ export function KelolaUser() {
               </p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Password Baru</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="Minimal 6 karakter"
-                  minLength={6}
-                  autoFocus
-                />
+                <div className="relative">
+                  <input
+                    type={showResetPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Minimal 6 karakter"
+                    minLength={6}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPassword(!showResetPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showResetPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button onClick={handleResetPassword} className="flex-1 bg-amber-600 text-white py-2 rounded-md font-medium hover:bg-amber-700 transition-colors">

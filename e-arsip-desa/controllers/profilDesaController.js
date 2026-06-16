@@ -1,8 +1,11 @@
 const db = require('../config/database');
+const { broadcast } = require('../utils/sse');
+const fs = require('fs');
+const path = require('path');
 
-exports.getProfil = (req, res) => {
+exports.getProfil = async (req, res) => {
   try {
-    const profil = db.prepare('SELECT * FROM profil_desa LIMIT 1').get();
+    const profil = await db.get('SELECT * FROM profil_desa LIMIT 1');
     if (!profil) {
       return res.status(404).json({ success: false, message: 'Profil desa belum diatur.' });
     }
@@ -12,9 +15,9 @@ exports.getProfil = (req, res) => {
   }
 };
 
-exports.updateProfil = (req, res) => {
+exports.updateProfil = async (req, res) => {
   try {
-    const profil = db.prepare('SELECT * FROM profil_desa LIMIT 1').get();
+    const profil = await db.get('SELECT * FROM profil_desa LIMIT 1');
     if (!profil) {
       return res.status(404).json({ success: false, message: 'Profil desa belum diatur.' });
     }
@@ -22,50 +25,59 @@ exports.updateProfil = (req, res) => {
     const {
       nama_desa, kecamatan, kabupaten, provinsi, kode_desa,
       alamat, telepon, email, inisial_desa, kode_surat_default,
-      separator, panjang_nomor
+      pemisah, panjang_nomor
     } = req.body;
 
     const logo = req.file ? `/uploads/${req.file.filename}` : profil.logo;
 
-    db.prepare(`
-      UPDATE profil_desa
-      SET nama_desa = COALESCE(?, nama_desa),
-          kecamatan = COALESCE(?, kecamatan),
-          kabupaten = COALESCE(?, kabupaten),
-          provinsi = COALESCE(?, provinsi),
-          kode_desa = COALESCE(?, kode_desa),
-          alamat = COALESCE(?, alamat),
-          telepon = COALESCE(?, telepon),
-          email = COALESCE(?, email),
-          logo = COALESCE(?, logo),
-          inisial_desa = COALESCE(?, inisial_desa),
-          kode_surat_default = COALESCE(?, kode_surat_default),
-          separator = COALESCE(?, separator),
-          panjang_nomor = COALESCE(?, panjang_nomor),
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
-      nama_desa || null, kecamatan || null, kabupaten || null, provinsi || null,
-      kode_desa || null, alamat || null, telepon !== undefined ? telepon : null,
-      email || null, logo || null, inisial_desa || null, kode_surat_default || null,
-      separator || null, panjang_nomor !== undefined ? panjang_nomor : null,
-      profil.id
+    if (req.file && profil.logo) {
+      const oldPath = path.join(__dirname, '..', profil.logo);
+      try { fs.unlinkSync(oldPath); } catch {}
+    }
+
+    await db.run(
+      `UPDATE profil_desa
+       SET nama_desa = COALESCE(?, nama_desa),
+           kecamatan = COALESCE(?, kecamatan),
+           kabupaten = COALESCE(?, kabupaten),
+           provinsi = COALESCE(?, provinsi),
+           kode_desa = COALESCE(?, kode_desa),
+           alamat = COALESCE(?, alamat),
+           telepon = COALESCE(?, telepon),
+           email = COALESCE(?, email),
+           logo = COALESCE(?, logo),
+           inisial_desa = COALESCE(?, inisial_desa),
+           kode_surat_default = COALESCE(?, kode_surat_default),
+           pemisah = COALESCE(?, pemisah),
+           panjang_nomor = COALESCE(?, panjang_nomor),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        nama_desa || null, kecamatan || null, kabupaten || null, provinsi || null,
+        kode_desa || null, alamat || null, telepon !== undefined ? telepon : null,
+        email || null, logo || null, inisial_desa || null, kode_surat_default || null,
+        pemisah || null, panjang_nomor !== undefined ? panjang_nomor : null,
+        profil.id
+      ]
     );
 
-    const updated = db.prepare('SELECT * FROM profil_desa WHERE id = ?').get(profil.id);
+    const updated = await db.get('SELECT * FROM profil_desa WHERE id = ?', [profil.id]);
 
-    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
-      .run(req.user.id, 'profil_desa', `Memperbarui profil desa ${updated.nama_desa}`);
+    await db.run(
+      'INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)',
+      [req.user.id, 'profil_desa', `Memperbarui profil desa ${updated.nama_desa}`]
+    );
 
+    broadcast('profil:updated', updated);
     res.json({ success: true, message: 'Profil desa berhasil diperbarui.', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-exports.getFormatNomor = (req, res) => {
+exports.getFormatNomor = async (req, res) => {
   try {
-    const profil = db.prepare('SELECT inisial_desa, kode_surat_default, separator, panjang_nomor FROM profil_desa LIMIT 1').get();
+    const profil = await db.get('SELECT inisial_desa, kode_surat_default, pemisah, panjang_nomor FROM profil_desa LIMIT 1');
     if (!profil) {
       return res.status(404).json({ success: false, message: 'Profil desa belum diatur.' });
     }
@@ -74,7 +86,7 @@ exports.getFormatNomor = (req, res) => {
     const urut = String(1).padStart(profil.panjang_nomor, '0');
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const year = now.getFullYear();
-    const sep = profil.separator;
+    const sep = profil.pemisah;
 
     const preview = `${urut}${sep}${profil.kode_surat_default}${sep}${profil.inisial_desa}${sep}${month}${sep}${year}`;
 
@@ -96,4 +108,3 @@ exports.getFormatNomor = (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-

@@ -14,6 +14,8 @@ interface SidebarProps {
   activePage: string;
   onPageChange: (page: string) => void;
   userRole: string;
+  sidebarOpen: boolean;
+  onClose: () => void;
 }
 
 const getMenuItems = (role: string) => {
@@ -39,6 +41,7 @@ const getMenuItems = (role: string) => {
   const adminMenu = [
     { id: 'surat-masuk', label: 'Surat Masuk', icon: Mail },
     { id: 'surat-keluar', label: 'Surat Keluar', icon: Send },
+    { id: 'disposisi', label: 'Disposisi', icon: FileText },
     { id: 'kelola-user', label: 'Kelola Pengguna', icon: Users },
     { id: 'profil-desa', label: 'Profil Desa', icon: Building2 },
     { id: 'klasifikasi', label: 'Klasifikasi', icon: Folder },
@@ -58,7 +61,7 @@ const getMenuItems = (role: string) => {
   }
 };
 
-export function Sidebar({ activePage, onPageChange, userRole }: SidebarProps) {
+export function Sidebar({ activePage, onPageChange, userRole, sidebarOpen, onClose }: SidebarProps) {
   const menuItems = getMenuItems(userRole);
 
   const getSidebarBgColor = (role: string) => {
@@ -89,7 +92,12 @@ export function Sidebar({ activePage, onPageChange, userRole }: SidebarProps) {
   const sidebarBgColor = getSidebarBgColor(userRole);
 
   return (
-    <div className={`w-64 ${sidebarBgColor} h-screen flex flex-col text-white`}>
+    <>
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-blue-900/50 z-30 md:hidden" onClick={onClose} />
+      )}
+      <div className={`fixed md:static z-40 inset-y-0 left-0 w-64 ${sidebarBgColor} h-screen flex flex-col text-white transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
       <div className="p-4 border-b border-blue-800">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center border-2 border-white">
@@ -114,7 +122,7 @@ export function Sidebar({ activePage, onPageChange, userRole }: SidebarProps) {
           return (
             <button
               key={item.id}
-              onClick={() => onPageChange(item.id)}
+              onClick={() => { onPageChange(item.id); onClose(); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded text-left transition-colors ${
                 isActive
                   ? 'bg-blue-800 text-white'
@@ -151,6 +159,7 @@ export function Sidebar({ activePage, onPageChange, userRole }: SidebarProps) {
         <p>All rights reserved.</p>
       </div>
     </div>
+    </>
   );
 }
 

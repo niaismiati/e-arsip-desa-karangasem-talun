@@ -1,25 +1,27 @@
 const bcrypt = require('bcryptjs');
 const db = require('../config/database');
+const { broadcast } = require('../utils/sse');
 
-exports.getAllUsers = (req, res) => {
+exports.getAllUsers = async (req, res) => {
   try {
-    const users = db.prepare(`
-      SELECT id, nama, email, role, status, avatar, created_at
-      FROM users
-      ORDER BY created_at DESC
-    `).all();
+    const users = await db.all(
+      `SELECT id, nama, email, role, status, avatar, created_at
+       FROM users
+       ORDER BY created_at DESC`
+    );
     res.json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-exports.getUserById = (req, res) => {
+exports.getUserById = async (req, res) => {
   try {
-    const user = db.prepare(`
-      SELECT id, nama, email, role, status, avatar, created_at
-      FROM users WHERE id = ?
-    `).get(req.params.id);
+    const user = await db.get(
+      `SELECT id, nama, email, role, status, avatar, created_at
+       FROM users WHERE id = ?`,
+      [req.params.id]
+    );
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
@@ -31,7 +33,7 @@ exports.getUserById = (req, res) => {
   }
 };
 
-exports.createUser = (req, res) => {
+exports.createUser = async (req, res) => {
   try {
     const { nama, email, password, role } = req.body;
 
@@ -47,65 +49,79 @@ exports.createUser = (req, res) => {
       return res.status(400).json({ success: false, message: 'Password minimal 6 karakter.' });
     }
 
-    const existing = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const existing = await db.get('SELECT * FROM users WHERE email = ?', [email]);
     if (existing) {
       return res.status(409).json({ success: false, message: 'Email sudah terdaftar.' });
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10);
-    const result = db.prepare(
-      'INSERT INTO users (nama, email, password, role, status) VALUES (?, ?, ?, ?, ?)'
-    ).run(nama, email, hashedPassword, role, 'Aktif');
+    const result = await db.run(
+      'INSERT INTO users (nama, email, password, role, status) VALUES (?, ?, ?, ?, ?)',
+      [nama, email, hashedPassword, role, 'Aktif']
+    );
 
-    const newUser = db.prepare('SELECT id, nama, email, role, status, created_at FROM users WHERE id = ?').get(result.lastInsertRowid);
+    const newUser = await db.get(
+      'SELECT id, nama, email, role, status, created_at FROM users WHERE id = ?',
+      [result.lastInsertRowid]
+    );
 
-    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
-      .run(req.user.id, 'users', `Menambahkan pengguna: ${nama} (${role})`);
+    await db.run(
+      'INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)',
+      [req.user.id, 'users', `Menambahkan pengguna: ${nama} (${role})`]
+    );
 
+    broadcast('users:created', newUser);
     res.status(201).json({ success: true, message: 'Pengguna berhasil ditambahkan.', data: newUser });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-exports.updateUser = (req, res) => {
+exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const { nama, email, role, status } = req.body;
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [id]);
     if (!user) {
       return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
     }
 
     if (email && email !== user.email) {
-      const existing = db.prepare('SELECT * FROM users WHERE email = ? AND id != ?').get(email, id);
+      const existing = await db.get('SELECT * FROM users WHERE email = ? AND id != ?', [email, id]);
       if (existing) {
         return res.status(409).json({ success: false, message: 'Email sudah digunakan.' });
       }
     }
 
-    db.prepare(`
-      UPDATE users
-      SET nama = COALESCE(?, nama),
-          email = COALESCE(?, email),
-          role = COALESCE(?, role),
-          status = COALESCE(?, status)
-      WHERE id = ?
-    `).run(nama || null, email || null, role || null, status || null, id);
+    await db.run(
+      `UPDATE users
+       SET nama = COALESCE(?, nama),
+           email = COALESCE(?, email),
+           role = COALESCE(?, role),
+           status = COALESCE(?, status)
+       WHERE id = ?`,
+      [nama || null, email || null, role || null, status || null, id]
+    );
 
-    const updated = db.prepare('SELECT id, nama, email, role, status, avatar, created_at FROM users WHERE id = ?').get(id);
+    const updated = await db.get(
+      'SELECT id, nama, email, role, status, avatar, created_at FROM users WHERE id = ?',
+      [id]
+    );
 
-    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
-      .run(req.user.id, 'users', `Memperbarui pengguna: ${updated.nama}`);
+    await db.run(
+      'INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)',
+      [req.user.id, 'users', `Memperbarui pengguna: ${updated.nama}`]
+    );
 
+    broadcast('users:updated', updated);
     res.json({ success: true, message: 'Pengguna berhasil diperbarui.', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-exports.deleteUser = (req, res) => {
+exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -113,33 +129,42 @@ exports.deleteUser = (req, res) => {
       return res.status(400).json({ success: false, message: 'Tidak dapat menghapus akun sendiri.' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [id]);
     if (!user) {
       return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
     }
 
-    const disposisiCount = db.prepare('SELECT COUNT(*) as total FROM disposisi WHERE dari_user_id = ? OR kepada_user_id = ?').get(id, id);
+    const disposisiCount = await db.get(
+      'SELECT COUNT(*) as total FROM disposisi WHERE dari_user_id = ? OR kepada_user_id = ?',
+      [id, id]
+    );
     if (disposisiCount.total > 0) {
-      return res.status(400).json({ success: false, message: `Tidak dapat menghapus: pengguna masih memiliki ${disposisiCount.total} disposisi terkait.` });
+      return res.status(400).json({
+        success: false,
+        message: `Tidak dapat menghapus: pengguna masih memiliki ${disposisiCount.total} disposisi terkait.`
+      });
     }
 
-    const aktivitasCount = db.prepare('SELECT COUNT(*) as total FROM aktivitas WHERE user_id = ?').get(id);
+    const aktivitasCount = await db.get('SELECT COUNT(*) as total FROM aktivitas WHERE user_id = ?', [id]);
     if (aktivitasCount.total > 0) {
-      db.prepare('UPDATE aktivitas SET user_id = NULL WHERE user_id = ?').run(id);
+      await db.run('UPDATE aktivitas SET user_id = NULL WHERE user_id = ?', [id]);
     }
 
-    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    await db.run('DELETE FROM users WHERE id = ?', [id]);
 
-    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
-      .run(req.user.id, 'users', `Menghapus pengguna: ${user.nama}`);
+    await db.run(
+      'INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)',
+      [req.user.id, 'users', `Menghapus pengguna: ${user.nama}`]
+    );
 
+    broadcast('users:deleted', { id: parseInt(id) });
     res.json({ success: true, message: 'Pengguna berhasil dihapus.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-exports.toggleActive = (req, res) => {
+exports.toggleActive = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -147,24 +172,27 @@ exports.toggleActive = (req, res) => {
       return res.status(400).json({ success: false, message: 'Tidak dapat mengubah status akun sendiri.' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [id]);
     if (!user) {
       return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
     }
 
     const newStatus = user.status === 'Aktif' ? 'Nonaktif' : 'Aktif';
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run(newStatus, id);
+    await db.run('UPDATE users SET status = ? WHERE id = ?', [newStatus, id]);
 
-    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
-      .run(req.user.id, 'users', `${newStatus === 'Aktif' ? 'Mengaktifkan' : 'Menonaktifkan'} pengguna: ${user.nama}`);
+    await db.run(
+      'INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)',
+      [req.user.id, 'users', `${newStatus === 'Aktif' ? 'Mengaktifkan' : 'Menonaktifkan'} pengguna: ${user.nama}`]
+    );
 
+    broadcast('users:toggle', { id: parseInt(id), status: newStatus });
     res.json({ success: true, message: `Pengguna berhasil ${newStatus === 'Aktif' ? 'diaktifkan' : 'dinonaktifkan'}.` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-exports.changePassword = (req, res) => {
+exports.changePassword = async (req, res) => {
   try {
     const { id } = req.params;
     const { password } = req.body;
@@ -173,20 +201,22 @@ exports.changePassword = (req, res) => {
       return res.status(400).json({ success: false, message: 'Password minimal 6 karakter.' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [id]);
     if (!user) {
       return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10);
-    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, id);
+    await db.run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, id]);
 
-    db.prepare('INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)')
-      .run(req.user.id, 'users', `Mereset password pengguna: ${user.nama}`);
+    await db.run(
+      'INSERT INTO aktivitas (user_id, tipe, deskripsi) VALUES (?, ?, ?)',
+      [req.user.id, 'users', `Mereset password pengguna: ${user.nama}`]
+    );
 
+    broadcast('users:password-changed', { id: parseInt(id) });
     res.json({ success: true, message: 'Password berhasil diubah.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-

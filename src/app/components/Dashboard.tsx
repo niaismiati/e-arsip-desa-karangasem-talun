@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Mail, Send, Clock, Archive } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useSSE } from '../../hooks/useSSE';
 
 export function Dashboard() {
   const [stats, setStats] = useState({
@@ -13,10 +14,6 @@ export function Dashboard() {
   const [recentLetters, setRecentLetters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem('token') || '';
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const loadData = async () => {
     try {
@@ -45,6 +42,17 @@ export function Dashboard() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useSSE([
+    'surat-masuk:created', 'surat-masuk:updated', 'surat-masuk:deleted',
+    'surat-keluar:created', 'surat-keluar:updated', 'surat-keluar:deleted',
+    'disposisi:created', 'disposisi:updated', 'disposisi:approved',
+    'disposisi:rejected', 'disposisi:selesai', 'disposisi:deleted',
+  ], loadData);
 
   const statsCards = [
     { id: 1, label: 'Surat Masuk', value: stats.suratMasuk, icon: Mail, color: 'bg-indigo-500' },

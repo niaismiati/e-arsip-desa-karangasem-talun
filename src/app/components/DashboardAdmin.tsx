@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Mail, Send, Folder, BarChart3, Users, Settings, Shield, Database } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useSSE } from '../../hooks/useSSE';
+import { DateTimeDisplay } from './DateTimeDisplay';
 
 export function DashboardAdmin() {
   const [stats, setStats] = useState({
@@ -11,39 +13,39 @@ export function DashboardAdmin() {
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const token = localStorage.getItem('token') || '';
-
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  // Polling: refresh stats every 10 seconds to reflect cross-role changes
-  useEffect(() => {
-    const iv = setInterval(() => {
-      loadStats();
-    }, 10000);
-    return () => clearInterval(iv);
-  }, [token]);
-
-  // Polling already covers auto-refresh every 10s
 
   const loadStats = async () => {
     try {
       setLoading(true);
+      const fetchWithCheck = async (url: string) => {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.message || `HTTP ${res.status}`);
+        }
+        return res.json();
+      };
       const [masuk, keluar, users, klasifikasi, chart] = await Promise.all([
-        fetch('/api/surat-masuk', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch('/api/surat-keluar', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch('/api/users', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch('/api/klasifikasi', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch('/api/laporan/grafik', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetchWithCheck('/api/surat-masuk'),
+        fetchWithCheck('/api/surat-keluar'),
+        fetchWithCheck('/api/users'),
+        fetchWithCheck('/api/klasifikasi'),
+        fetchWithCheck('/api/laporan/grafik'),
       ]);
       
-      const getResult = (response: any) => (response?.success ? response.data : response?.data || response || []);
+      const getResult = (response: any): any[] => {
+        if (response?.success && Array.isArray(response.data)) return response.data;
+        if (Array.isArray(response?.data)) return response.data;
+        if (Array.isArray(response)) return response;
+        return [];
+      };
       const masuks = getResult(masuk);
       const keluars = getResult(keluar);
       const penggunas = getResult(users);
       const klasifikasis = getResult(klasifikasi);
-      const chartDataArray = Array.isArray(chart) ? chart : (chart?.data || []);
+      const chartDataArray = Array.isArray(chart) ? chart : (Array.isArray(chart?.data) ? chart.data : []);
 
       setStats({
         suratMasuk: masuks.length,
@@ -58,10 +60,21 @@ export function DashboardAdmin() {
       })));
     } catch (err) {
       console.error('Error loading admin stats:', err);
+      setError('Gagal memuat data dashboard');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  useSSE([
+    'surat-masuk:created', 'surat-masuk:updated', 'surat-masuk:deleted',
+    'surat-keluar:created', 'surat-keluar:updated', 'surat-keluar:deleted',
+    'users:created', 'users:updated', 'users:deleted', 'users:toggle',
+  ], loadStats);
 
   const statsCards = [
     { id: 'surat-masuk', label: 'Surat Masuk', value: stats.suratMasuk, icon: Mail, color: 'bg-blue-500' },
@@ -73,11 +86,27 @@ export function DashboardAdmin() {
   const defaultChartData: any[] = [];
   const displayChartData = chartData.length > 0 ? chartData : defaultChartData;
 
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+          <p className="text-red-600">{error}</p>
+          <button onClick={() => { setError(''); loadStats(); }} className="mt-2 text-sm text-indigo-600 hover:underline">Coba lagi</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">Dashboard Admin</h2>
-        <p className="text-gray-600">Kelola sistem e-arsip Desa Karangasem</p>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Dashboard Admin</h2>
+            <p className="text-gray-600">Kelola sistem e-arsip Desa Karangasem</p>
+          </div>
+          <DateTimeDisplay />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

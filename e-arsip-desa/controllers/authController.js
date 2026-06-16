@@ -1,8 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'e-arsip-desa-karangasem-secret-key-2024';
+const { broadcast } = require('../utils/sse');
+const { JWT_SECRET } = require('../config/jwt');
 
 function generateToken(user) {
   return jwt.sign(
@@ -20,27 +20,29 @@ exports.register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Semua field wajib diisi.' });
     }
 
-    if (role !== 'operator') {
-      return res.status(400).json({ success: false, message: 'Registrasi hanya untuk role Operator. Hubungi admin untuk role lainnya.' });
+    if (!['admin', 'kades', 'operator'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Role tidak valid.' });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ success: false, message: 'Password minimal 6 karakter.' });
     }
 
-    const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const existingUser = await db.get('SELECT * FROM users WHERE email = ?', [email]);
     if (existingUser) {
       return res.status(409).json({ success: false, message: 'Email sudah terdaftar.' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 8);
-    const result = db.prepare(
-      'INSERT INTO users (nama, email, password, role, status) VALUES (?, ?, ?, ?, ?)'
-    ).run(nama, email, hashedPassword, role, 'Aktif');
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await db.run(
+      'INSERT INTO users (nama, email, password, role, status) VALUES (?, ?, ?, ?, ?)',
+      [nama, email, hashedPassword, role, 'Aktif']
+    );
 
-    const user = db.prepare('SELECT id, nama, email, role, status FROM users WHERE id = ?').get(result.lastInsertRowid);
+    const user = await db.get('SELECT id, nama, email, role, status FROM users WHERE id = ?', [result.lastInsertRowid]);
     const token = generateToken(user);
 
+    broadcast('users:created', user);
     res.status(201).json({
       success: true,
       message: 'Registrasi berhasil.',
@@ -59,7 +61,7 @@ exports.login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email dan password wajib diisi.' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Email atau password salah.' });
     }
@@ -88,7 +90,7 @@ exports.login = async (req, res) => {
 
 exports.getMe = async (req, res) => {
   try {
-    const user = db.prepare('SELECT id, nama, email, role, status, avatar FROM users WHERE id = ?').get(req.user.id);
+    const user = await db.get('SELECT id, nama, email, role, status, avatar FROM users WHERE id = ?', [req.user.id]);
     if (!user) {
       return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
     }
@@ -97,4 +99,3 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-

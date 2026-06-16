@@ -3,13 +3,16 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5000', 'http://localhost:5173', 'http://127.0.0.1:5000', 'http://127.0.0.1:5173'],
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -22,7 +25,9 @@ app.use(express.static(path.join(__dirname, '..', 'dist')));
 // Request timeout middleware (30s)
 app.use((req, res, next) => {
   res.setTimeout(30000, () => {
-    res.status(503).json({ success: false, message: 'Waktu permintaan habis. Silakan coba lagi.' });
+    if (!res.headersSent) {
+      res.status(503).json({ success: false, message: 'Waktu permintaan habis. Silakan coba lagi.' });
+    }
   });
   next();
 });
@@ -37,6 +42,7 @@ const disposisiRoutes = require('./routes/disposisiRoutes');
 const laporanRoutes = require('./routes/laporanRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const profilDesaRoutes = require('./routes/profilDesaRoutes');
+const sseRoutes = require('./routes/sseRoutes');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -48,6 +54,7 @@ app.use('/api/disposisi', disposisiRoutes);
 app.use('/api/laporan', laporanRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/profil-desa', profilDesaRoutes);
+app.use('/api', sseRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

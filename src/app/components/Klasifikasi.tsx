@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Pencil, Trash2, Eye, X, AlertCircle, Folder, Archive } from 'lucide-react';
+import { useSSE } from '../../hooks/useSSE';
 
 interface KlasifikasiItem {
   id: number;
@@ -27,10 +28,6 @@ export function Klasifikasi() {
 
   const token = localStorage.getItem('token') || '';
 
-  useEffect(() => {
-    loadData();
-  }, [search]);
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -38,6 +35,10 @@ export function Klasifikasi() {
       const res = await fetch(`/api/klasifikasi${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) setItems(data.data);
       else setError(data.message);
@@ -47,6 +48,14 @@ export function Klasifikasi() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, [search]);
+
+  useSSE([
+    'klasifikasi:created', 'klasifikasi:updated', 'klasifikasi:deleted',
+  ], loadData);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +70,10 @@ export function Klasifikasi() {
         },
         body: JSON.stringify(form),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setShowForm(false);
@@ -82,6 +95,10 @@ export function Klasifikasi() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setDeleteItem(null);
@@ -142,7 +159,7 @@ export function Klasifikasi() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow overflow-hidden overflow-y-auto max-h-[80vh]">
         <table className="w-full">
           <thead className="bg-gray-50 border-b">
             <tr>
@@ -197,7 +214,7 @@ export function Klasifikasi() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-40">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
             <div className="flex items-center justify-between p-6 border-b">
               <h3 className="text-xl font-semibold text-gray-900">{editingId ? 'Edit' : 'Tambah'} Klasifikasi</h3>
@@ -246,7 +263,7 @@ export function Klasifikasi() {
       )}
 
       {detailItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-40">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b">
               <h3 className="text-xl font-semibold text-gray-900">Detail Klasifikasi</h3>
@@ -271,7 +288,7 @@ export function Klasifikasi() {
       )}
 
       {deleteItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-40">
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Hapus Klasifikasi?</h3>

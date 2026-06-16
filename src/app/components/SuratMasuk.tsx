@@ -1,5 +1,6 @@
 import { Plus, Search, Edit, Trash2, Download, FileText, X, Mail } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
+import { useSSE } from '../../hooks/useSSE';
 
 interface Surat {
   id: number;
@@ -35,6 +36,7 @@ export function SuratMasuk() {
   const [klasifikasiList, setKlasifikasiList] = useState<{id: string, kode: string, nama: string}[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [filters, setFilters] = useState({ klasifikasi: '', asal: '', status: '' });
+  const userRole = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}').role || ''; } catch { return ''; } })();
 
   // Fetch klasifikasi
   const fetchKlasifikasi = useCallback(async () => {
@@ -44,6 +46,10 @@ export function SuratMasuk() {
       const res = await fetch('/api/klasifikasi', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setKlasifikasiList(data.data);
@@ -67,6 +73,10 @@ export function SuratMasuk() {
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${response.status}`);
+      }
       const data = await response.json();
       if (data.success) {
         setSuratList((data.data as any[]).map((s): Surat => ({
@@ -100,11 +110,9 @@ export function SuratMasuk() {
     fetchSurat({ search: searchTerm, ...filters });
   }, [fetchKlasifikasi, fetchSurat, searchTerm, filters]);
 
-  // Auto-refresh: polling every 15 detik (SSE tidak tersedia di backend)
-  useEffect(() => {
-    const iv = setInterval(() => fetchSurat({ search: searchTerm, ...filters }), 15000);
-    return () => clearInterval(iv);
-  }, [searchTerm, filters, fetchSurat]);
+  useSSE([
+    'surat-masuk:created', 'surat-masuk:updated', 'surat-masuk:deleted',
+  ], () => fetchSurat({ search: searchTerm, ...filters }), 30000);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -154,6 +162,10 @@ export function SuratMasuk() {
         headers: { 'Authorization': `Bearer ${token}` },
         body: formDataToSend
       });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${response.status}`);
+      }
       const data = await response.json();
       if (data.success) {
         await fetchSurat({ search: searchTerm, ...filters });
@@ -181,6 +193,10 @@ export function SuratMasuk() {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         await fetchSurat({ search: searchTerm, ...filters });
@@ -218,21 +234,19 @@ export function SuratMasuk() {
   const filteredSurat = suratList;
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50">
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Surat Masuk</h2>
-            <p className="text-sm text-gray-600">Kelola data surat masuk yang diterima</p>
-          </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            Tambah Surat Masuk
-          </button>
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Surat Masuk</h2>
+          <p className="text-sm text-gray-600">Kelola data surat masuk yang diterima</p>
         </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          Tambah Surat Masuk
+        </button>
       </div>
 
       {/* Filter Bar */}
@@ -289,8 +303,8 @@ export function SuratMasuk() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-lg shadow overflow-x-auto max-h-[80vh] overflow-y-auto">
+        <div className="min-w-[900px]">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -331,13 +345,15 @@ export function SuratMasuk() {
                       <button onClick={() => handleEdit(surat)} className="p-1 text-indigo-600 hover:bg-blue-50 rounded" title="Edit">
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => handleDelete(surat.id)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
-                        title="Hapus"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {(userRole === 'admin' || userRole === 'operator') && (
+                        <button
+                          onClick={() => handleDelete(surat.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          title="Hapus"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                       {surat.lampiran && (
                         <a href={surat.lampiran} target="_blank" rel="noopener noreferrer" className="p-1 text-green-600 hover:bg-green-50 rounded inline-flex" title="Unduh Lampiran">
                           <Download className="w-4 h-4" />
@@ -359,10 +375,10 @@ export function SuratMasuk() {
 
       {/* Modal Tambah Surat */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-xl font-semibold text-gray-900">Tambah Surat Masuk</h3>
+              <h3 className="text-xl font-semibold text-gray-900">{editingId ? 'Edit' : 'Tambah'} Surat Masuk</h3>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-gray-400 hover:text-gray-600"

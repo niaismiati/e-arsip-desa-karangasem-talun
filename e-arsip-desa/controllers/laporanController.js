@@ -1,6 +1,6 @@
 const db = require('../config/database');
 
-exports.getRekap = (req, res) => {
+exports.getRekap = async (req, res) => {
   try {
     const { tahun, bulan, jenis } = req.query;
     const currentYear = new Date().getFullYear();
@@ -10,46 +10,49 @@ exports.getRekap = (req, res) => {
     const params = [];
 
     if (tahun) {
-      whereClause += ` AND strftime('%Y', tanggal_surat) = ?`;
+      whereClause += ` AND YEAR(tanggal_surat) = ?`;
       params.push(String(tahun));
     }
     if (bulan) {
-      whereClause += ` AND strftime('%m', tanggal_surat) = ?`;
-      params.push(String(bulan).padStart(2, '0'));
+      whereClause += ` AND MONTH(tanggal_surat) = ?`;
+      params.push(String(bulan));
     }
 
-    // Get all klasifikasi
-    const klasifikasiList = db.prepare('SELECT * FROM klasifikasi ORDER BY kode ASC').all();
+    const klasifikasiList = await db.all('SELECT * FROM klasifikasi ORDER BY kode ASC');
 
-    const result = klasifikasiList.map(k => {
+    const result = [];
+    for (const k of klasifikasiList) {
       let masukCount = 0;
       let keluarCount = 0;
 
       if (!jenis || jenis === 'masuk' || jenis === 'semua') {
-        const m = db.prepare(`
-          SELECT COUNT(*) as total FROM surat_masuk
-          WHERE klasifikasi_id = ? ${whereClause}
-        `).get(k.id, ...params);
+        const m = await db.get(
+          `SELECT COUNT(*) as total FROM surat_masuk WHERE klasifikasi_id = ? ${whereClause}`,
+          [k.id, ...params]
+        );
         masukCount = m.total;
       }
 
       if (!jenis || jenis === 'keluar' || jenis === 'semua') {
-        const kq = db.prepare(`
-          SELECT COUNT(*) as total FROM surat_keluar
-          WHERE klasifikasi_id = ? ${whereClause}
-        `).get(k.id, ...params);
+        const kq = await db.get(
+          `SELECT COUNT(*) as total FROM surat_keluar WHERE klasifikasi_id = ? ${whereClause}`,
+          [k.id, ...params]
+        );
         keluarCount = kq.total;
       }
 
-      return {
-        klasifikasi_id: k.id,
-        kode: k.kode,
-        nama: k.nama,
-        surat_masuk: masukCount,
-        surat_keluar: keluarCount,
-        total: masukCount + keluarCount
-      };
-    }).filter(item => item.total > 0);
+      const total = masukCount + keluarCount;
+      if (total > 0) {
+        result.push({
+          klasifikasi_id: k.id,
+          kode: k.kode,
+          nama: k.nama,
+          surat_masuk: masukCount,
+          surat_keluar: keluarCount,
+          total
+        });
+      }
+    }
 
     const totalMasuk = result.reduce((sum, r) => sum + r.surat_masuk, 0);
     const totalKeluar = result.reduce((sum, r) => sum + r.surat_keluar, 0);
@@ -75,35 +78,38 @@ exports.getRekap = (req, res) => {
   }
 };
 
-exports.getStatistikBulanan = (req, res) => {
+exports.getStatistikBulanan = async (req, res) => {
   try {
     const { tahun } = req.query;
     const targetTahun = tahun || new Date().getFullYear();
 
     const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-    const result = months.map((nama, index) => {
-      const monthNum = String(index + 1).padStart(2, '0');
+    const result = [];
 
-      const masuk = db.prepare(`
-        SELECT COUNT(*) as total FROM surat_masuk
-        WHERE strftime('%Y', tanggal_surat) = ? AND strftime('%m', tanggal_surat) = ?
-      `).get(String(targetTahun), monthNum);
+    for (let i = 0; i < months.length; i++) {
+      const monthNum = i + 1;
 
-      const keluar = db.prepare(`
-        SELECT COUNT(*) as total FROM surat_keluar
-        WHERE strftime('%Y', tanggal_surat) = ? AND strftime('%m', tanggal_surat) = ?
-      `).get(String(targetTahun), monthNum);
+      const masuk = await db.get(
+        `SELECT COUNT(*) as total FROM surat_masuk
+         WHERE YEAR(tanggal_surat) = ? AND MONTH(tanggal_surat) = ?`,
+        [String(targetTahun), monthNum]
+      );
 
-      return {
-        bulan: nama,
+      const keluar = await db.get(
+        `SELECT COUNT(*) as total FROM surat_keluar
+         WHERE YEAR(tanggal_surat) = ? AND MONTH(tanggal_surat) = ?`,
+        [String(targetTahun), monthNum]
+      );
+
+      result.push({
+        bulan: months[i],
         masuk: masuk.total,
         keluar: keluar.total
-      };
-    });
+      });
+    }
 
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-

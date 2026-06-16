@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Search, Plus, Eye, X, CheckCircle, AlertCircle, User } from 'lucide-react';
+import { useSSE } from '../../hooks/useSSE';
 
 interface DisposisiItem {
   id: number;
@@ -33,7 +34,11 @@ interface UserOption {
 
 type StatusBackend = 'Menunggu' | 'Disetujui' | 'Ditolak' | 'Selesai';
 
-export function Disposisi() {
+interface DisposisiProps {
+  userRole: string;
+}
+
+export function Disposisi({ userRole }: DisposisiProps) {
   const [items, setItems] = useState<DisposisiItem[]>([]);
   const [suratMasukList, setSuratMasukList] = useState<SuratMasukOption[]>([]);
   const [userList, setUserList] = useState<UserOption[]>([]);
@@ -57,46 +62,6 @@ export function Disposisi() {
 
   const token = localStorage.getItem('token') || '';
 
-  useEffect(() => {
-    loadData();
-  }, [search, filterStatus]);
-
-  // Auto-refresh: polling every 15 detik (SSE tidak tersedia di backend)
-  useEffect(() => {
-    const iv = setInterval(loadData, 15000);
-    return () => clearInterval(iv);
-  }, [search, filterStatus]);
-
-  useEffect(() => {
-    loadSuratMasuk();
-    loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadSuratMasuk = async () => {
-    try {
-      const res = await fetch('/api/surat-masuk?status=' + encodeURIComponent('Belum Disposisi'), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data?.data) setSuratMasukList(data.data);
-    } catch (e) {
-      console.error('Gagal load surat masuk untuk disposisi:', e);
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      const res = await fetch('/api/users', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data?.data) setUserList(data.data);
-    } catch (e) {
-      console.error('Gagal load user untuk disposisi:', e);
-    }
-  };
-
   const loadData = async () => {
     setLoading(true);
     setError('');
@@ -109,6 +74,10 @@ export function Disposisi() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data?.data) setItems(data.data);
       else setItems([]);
@@ -118,6 +87,54 @@ export function Disposisi() {
       setLoading(false);
     }
   };
+
+  const loadSuratMasuk = async () => {
+    try {
+      const res = await fetch('/api/surat-masuk?status=' + encodeURIComponent('Belum Disposisi'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data?.data) setSuratMasukList(data.data);
+    } catch (e) {
+      console.error('Gagal load surat masuk untuk disposisi:', e);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const res = await fetch('/api/users', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data?.data) setUserList(data.data);
+    } catch (e) {
+      console.error('Gagal load user untuk disposisi:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [search, filterStatus]);
+
+  useSSE([
+    'disposisi:created', 'disposisi:updated', 'disposisi:approved',
+    'disposisi:rejected', 'disposisi:selesai', 'disposisi:deleted',
+    'surat-masuk:created', 'surat-masuk:updated', 'surat-masuk:deleted',
+  ], loadData, 30000);
+
+  useEffect(() => {
+    loadSuratMasuk();
+    loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,8 +305,8 @@ export function Disposisi() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-lg shadow overflow-x-auto overflow-y-auto max-h-[80vh]">
+        <table className="w-full" style={{ minWidth: '1100px' }}>
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">No</th>
@@ -357,7 +374,7 @@ export function Disposisi() {
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      {item.status === 'Menunggu' && (
+                      {item.status === 'Menunggu' && (userRole === 'operator' || userRole === 'admin') && (
                         <button
                           onClick={() => {
                             setStatusAction({ id: item.id, newStatus: 'Selesai' });
@@ -379,15 +396,15 @@ export function Disposisi() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-40">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-6 border-b">
               <h3 className="text-xl font-semibold text-gray-900">Buat Disposisi</h3>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Surat Masuk</label>
                 <select
@@ -473,7 +490,7 @@ export function Disposisi() {
       )}
 
       {detailItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-40">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b">
               <h3 className="text-xl font-semibold text-gray-900">Detail Disposisi</h3>
@@ -527,37 +544,43 @@ export function Disposisi() {
             <div className="p-4 border-t flex flex-col gap-2">
               {detailItem.status === 'Menunggu' && (
                 <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setStatusAction({ id: detailItem.id, newStatus: 'Disetujui' });
-                      setStatusCatatan('');
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    Setujui
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStatusAction({ id: detailItem.id, newStatus: 'Ditolak' });
-                      setStatusCatatan('');
-                    }}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    Tolak
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStatusAction({ id: detailItem.id, newStatus: 'Selesai' });
-                      setStatusCatatan('');
-                    }}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    Selesai
-                  </button>
+                  {(userRole === 'kades' || userRole === 'admin') && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setStatusAction({ id: detailItem.id, newStatus: 'Disetujui' });
+                          setStatusCatatan('');
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Setujui
+                      </button>
+                      <button
+                        onClick={() => {
+                          setStatusAction({ id: detailItem.id, newStatus: 'Ditolak' });
+                          setStatusCatatan('');
+                        }}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                      >
+                        Tolak
+                      </button>
+                    </>
+                  )}
+                  {(userRole === 'operator' || userRole === 'admin') && (
+                    <button
+                      onClick={() => {
+                        setStatusAction({ id: detailItem.id, newStatus: 'Selesai' });
+                        setStatusCatatan('');
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      Selesai
+                    </button>
+                  )}
                 </div>
               )}
 
-              {detailItem.status === 'Disetujui' && (
+              {detailItem.status === 'Disetujui' && (userRole === 'operator' || userRole === 'admin') && (
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => {
@@ -585,7 +608,7 @@ export function Disposisi() {
       )}
 
       {statusAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Konfirmasi Tindakan</h3>
             <p className="text-sm text-gray-600 mb-4">

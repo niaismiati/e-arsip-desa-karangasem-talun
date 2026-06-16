@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Bell, LogOut, User, Menu, ChevronDown } from 'lucide-react';
 
 interface HeaderProps {
@@ -7,36 +7,29 @@ interface HeaderProps {
   pageTitle: string;
   pageSubtitle?: string;
   onLogout: () => void;
+  onToggleSidebar: () => void;
 }
 
-export function Header({ userName, userRole, pageTitle, pageSubtitle, onLogout }: HeaderProps) {
+export function Header({ userName, userRole, pageTitle, pageSubtitle, onLogout, onToggleSidebar }: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'Admin':
-        return 'bg-indigo-600';
-      case 'Kepala Desa':
-        return 'bg-indigo-600';
-      default:
-        return 'bg-indigo-600';
-    }
-  };
-  const getRoleTextColor = (role: string) => {
-    switch (role) {
-      case 'Admin':
-        return 'text-indigo-100';
-      case 'Kepala Desa':
-        return 'text-indigo-100';
-      default:
-        return 'text-indigo-100';
-    }
-  };
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMenu]);
 
   return (
-    <header className={`${getRoleColor(userRole)} text-white px-6 py-3`}>
+    <header className="bg-indigo-600 text-white px-6 py-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button className="p-2 hover:bg-white/10 rounded transition-colors">
+          <button onClick={onToggleSidebar} className="p-2 hover:bg-white/10 rounded transition-colors">
             <Menu className="w-5 h-5" />
           </button>
           <div>
@@ -46,13 +39,11 @@ export function Header({ userName, userRole, pageTitle, pageSubtitle, onLogout }
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Notifications */}
           <button className="relative p-2 hover:bg-white/10 rounded transition-colors">
             <Bell className="w-5 h-5" />
           </button>
 
-          {/* User Profile with Logout Dropdown */}
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
               className="flex items-center gap-3 p-2 hover:bg-white/10 rounded transition-colors"
@@ -60,11 +51,11 @@ export function Header({ userName, userRole, pageTitle, pageSubtitle, onLogout }
               <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
                 <User className="w-6 h-6 text-indigo-600" />
               </div>
-               <div className="text-right hidden sm:block">
-                 <p className="text-sm font-medium">{userName}</p>
-                 <p className={`text-xs ${getRoleTextColor(userRole)}`}>{userRole}</p>
-               </div>
-               <ChevronDown className={`w-4 h-4 ${getRoleTextColor(userRole)}`} />
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium">{userName}</p>
+                <p className="text-xs text-indigo-100">{userRole}</p>
+              </div>
+              <ChevronDown className="w-4 h-4 text-indigo-100" />
             </button>
 
             {showMenu && (

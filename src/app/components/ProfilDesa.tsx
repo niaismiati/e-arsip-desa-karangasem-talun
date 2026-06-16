@@ -1,5 +1,6 @@
 import { Building2, Upload, Save, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useSSE } from '../../hooks/useSSE';
 
 const DEFAULT_FORM = {
   namaDesa: 'Desa Karangasem',
@@ -12,7 +13,7 @@ const DEFAULT_FORM = {
   email: 'desa@karangasem.desa.id',
   inisialDesa: 'KS',
   kodeSurat: '470',
-  separator: '/',
+  pemisah: '/',
   panjangNomor: '3'
 };
 
@@ -26,39 +27,48 @@ export function ProfilDesa() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    const fetchProfil = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        const res = await fetch('/api/profil-desa', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (data.success && data.data) {
-          setFormData({
-            namaDesa: data.data.nama_desa || '',
-            kecamatan: data.data.kecamatan || '',
-            kabupaten: data.data.kabupaten || '',
-            provinsi: data.data.provinsi || '',
-            kodeDesa: data.data.kode_desa || '',
-            alamat: data.data.alamat || '',
-            telepon: data.data.telepon || '',
-            email: data.data.email || '',
-            inisialDesa: data.data.inisial_desa || '',
-            kodeSurat: data.data.kode_surat_default || '',
-            separator: data.data.separator || '/',
-            panjangNomor: String(data.data.panjang_nomor || 3)
-          });
-          if (data.data.logo) setLogoPreview(data.data.logo);
-        }
-      } catch {
-        setError('Gagal memuat profil desa');
-      } finally {
-        setFetching(false);
-      }
-    };
     fetchProfil();
   }, []);
+
+  useSSE([
+    'profil:updated',
+  ], fetchProfil);
+
+  async function fetchProfil() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch('/api/profil-desa', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.success && data.data) {
+        setFormData({
+          namaDesa: data.data.nama_desa || '',
+          kecamatan: data.data.kecamatan || '',
+          kabupaten: data.data.kabupaten || '',
+          provinsi: data.data.provinsi || '',
+          kodeDesa: data.data.kode_desa || '',
+          alamat: data.data.alamat || '',
+          telepon: data.data.telepon || '',
+          email: data.data.email || '',
+          inisialDesa: data.data.inisial_desa || '',
+          kodeSurat: data.data.kode_surat_default || '',
+          pemisah: data.data.pemisah || '/',
+          panjangNomor: String(data.data.panjang_nomor || 3)
+        });
+        if (data.data.logo) setLogoPreview(data.data.logo);
+      }
+    } catch {
+      setError('Gagal memuat profil desa');
+    } finally {
+      setFetching(false);
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +90,7 @@ export function ProfilDesa() {
       body.append('email', formData.email);
       body.append('inisial_desa', formData.inisialDesa);
       body.append('kode_surat_default', formData.kodeSurat);
-      body.append('separator', formData.separator);
+      body.append('pemisah', formData.pemisah);
       body.append('panjang_nomor', formData.panjangNomor);
       if (logoFile) body.append('logo', logoFile);
 
@@ -89,6 +99,10 @@ export function ProfilDesa() {
         headers: { 'Authorization': `Bearer ${token}` },
         body
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setSuccess('Profil desa berhasil diperbarui!');
@@ -324,8 +338,8 @@ export function ProfilDesa() {
                 Separator
               </label>
               <select
-                value={formData.separator}
-                onChange={(e) => setFormData({...formData, separator: e.target.value})}
+                value={formData.pemisah}
+                onChange={(e) => setFormData({...formData, pemisah: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               >
                 <option value="/">/</option>
@@ -354,13 +368,13 @@ export function ProfilDesa() {
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <p className="text-sm font-medium text-gray-700 mb-2">Preview Nomor Surat:</p>
             <p className="font-mono text-lg text-gray-900">
-              001 {formData.separator} {formData.kodeSurat} {formData.separator} {formData.inisialDesa} {formData.separator} 06 {formData.separator} {new Date().getFullYear()}
+              001 {formData.pemisah} {formData.kodeSurat} {formData.pemisah} {formData.inisialDesa} {formData.pemisah} {String(new Date().getMonth() + 1).padStart(2, '0')} {formData.pemisah} {new Date().getFullYear()}
             </p>
             <div className="text-xs text-gray-500 mt-2 space-y-1">
               <p>001 - Nomor urut</p>
               <p>{formData.kodeSurat} - Kode surat</p>
               <p>{formData.inisialDesa} - Inisial {formData.namaDesa}</p>
-              <p>06 - Bulan (Juni)</p>
+              <p>{String(new Date().getMonth() + 1).padStart(2, '0')} - Bulan ({new Date().toLocaleString('id-ID', { month: 'long' })})</p>
               <p>              {new Date().getFullYear()} - Tahun</p>
             </div>
           </div>
@@ -371,7 +385,7 @@ export function ProfilDesa() {
           <button
             type="submit"
             disabled={loading || fetching}
-            className="bg-indigo-600 text-white px-6 py-2.5 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium disabled:bg-indigo-400 disabled:cursor-not-allowed"
+            className="bg-blue-600 text-white px-6 py-2.5 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium disabled:bg-blue-400 disabled:cursor-not-allowed"
           >
             {loading ? (
               <RefreshCw className="w-5 h-5 animate-spin" />
