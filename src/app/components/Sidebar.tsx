@@ -34,7 +34,7 @@ const getMenuItems = (role: string) => {
   const kadesMenu = [
     { id: 'surat-masuk', label: 'Surat Masuk', icon: Mail },
     { id: 'surat-keluar', label: 'Surat Keluar', icon: Send },
-    { id: 'disposisi', label: 'Disposisi Saya', icon: FileText },
+    { id: 'disposisi', label: 'Disposisi', icon: FileText },
     { id: 'laporan', label: 'Laporan', icon: BarChart3 },
   ];
 
