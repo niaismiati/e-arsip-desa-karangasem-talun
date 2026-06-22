@@ -3,6 +3,7 @@ import { Mail, Send, Clock, CheckCircle, FileText, BarChart3, TrendingUp } from 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useSSE } from '../../hooks/useSSE';
 import { DateTimeDisplay } from './DateTimeDisplay';
+import { api } from '../../services/api';
 
 export function DashboardPimpinan() {
   const [stats, setStats] = useState({
@@ -14,36 +15,26 @@ export function DashboardPimpinan() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const token = localStorage.getItem('token') || '';
 
   const loadStats = async () => {
     try {
       setLoading(true);
-      const fetchWithCheck = async (url: string) => {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          throw new Error(errData?.message || `HTTP ${res.status}`);
-        }
-        return res.json();
-      };
       const [masuk, keluar, disposisi, chart] = await Promise.all([
-        fetchWithCheck('/api/surat-masuk'),
-        fetchWithCheck('/api/surat-keluar'),
-        fetchWithCheck('/api/disposisi'),
-        fetchWithCheck('/api/laporan/grafik'),
+        api.get('/surat-masuk'),
+        api.get('/surat-keluar'),
+        api.get('/disposisi'),
+        api.get('/laporan/grafik'),
       ]);
       
-      const getResult = (response: any): any[] => {
-        if (response?.success && Array.isArray(response.data)) return response.data;
+      const getData = (response: any): any[] => {
         if (Array.isArray(response?.data)) return response.data;
         if (Array.isArray(response)) return response;
         return [];
       };
-      const masuks = getResult(masuk);
-      const keluars = getResult(keluar);
-      const disposisis = getResult(disposisi);
-      const chartDataArray = Array.isArray(chart) ? chart : (Array.isArray(chart?.data) ? chart.data : []);
+      const masuks = getData(masuk);
+      const keluars = getData(keluar);
+      const disposisis = getData(disposisi);
+      const chartDataArray = getData(chart);
       
       setStats({
         suratMasuk: masuks.length,

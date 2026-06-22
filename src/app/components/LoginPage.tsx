@@ -1,5 +1,6 @@
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
+import { api, ApiError } from '../../services/api';
 
 interface LoginPageProps {
   onLogin: (role: string, token: string, user: { nama: string; email: string; role: string }) => void;
@@ -12,36 +13,26 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const fetchWithTimeout = (url: string, options: RequestInit, timeoutMs = 10000) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await fetchWithTimeout('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      const data = await api.post<{
+        success: boolean;
+        data: { token: string; user: { nama: string; email: string; role: string } };
+      }>('/auth/login', {
+        email: email.trim(),
+        password: password.trim(),
       });
-
-      const data = await response.json();
 
       if (data.success) {
         onLogin(data.data.user.role, data.data.token, data.data.user);
-      } else {
-        setError(data.message || 'Login gagal');
       }
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        setError('Koneksi lambat. Silakan coba lagi.');
-      } else if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        setError('Gagal terhubung ke server. Pastikan server backend berjalan.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
       } else {
         console.error('[LoginPage] Error:', err);
         setError('Terjadi kesalahan. Silakan coba lagi.');

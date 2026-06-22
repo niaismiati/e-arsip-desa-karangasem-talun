@@ -2,6 +2,7 @@ import { Component, ReactNode, useEffect, useState, ErrorInfo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from '../pages/LandingPage';
 import { LoginPage } from './components/LoginPage';
+import { api } from '../services/api';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardPimpinan } from './components/DashboardPimpinan';
@@ -154,22 +155,18 @@ export default function App() {
 
     let cancelled = false;
 
-    fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (response) => {
-        const data = await response.json().catch(() => null);
-        if (!response.ok || !data?.success) {
-          throw new Error(data?.message || 'Sesi tidak valid');
-        }
-        return data.data;
-      })
-      .then((user) => {
+    api.get('/auth/me')
+      .then((data) => {
         if (cancelled) return;
-        const normalizedUser = { ...user, role: normalizeRole(user?.role) };
-        localStorage.setItem('user', JSON.stringify(normalizedUser));
-        setUserRole(normalizedUser.role);
-        setIsLoggedIn(true);
+        if (data?.success && data.data) {
+          const user = data.data as any;
+          const normalizedUser = { ...user, role: normalizeRole(user?.role) };
+          localStorage.setItem('user', JSON.stringify(normalizedUser));
+          setUserRole(normalizedUser.role);
+          setIsLoggedIn(true);
+        } else {
+          throw new Error('Sesi tidak valid');
+        }
       })
       .catch(() => {
         if (cancelled) return;

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { fetchEventSource } from '@microsoft/fetch-event-source';
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY = 1000;
@@ -17,7 +18,7 @@ export function useSSE(
     const token = localStorage.getItem('token') || '';
     if (!token) return;
 
-    let es: EventSource | null = null;
+    let ctrl: AbortController | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let destroyed = false;
@@ -25,19 +26,15 @@ export function useSSE(
 
     function startPolling() {
       if (pollTimer || destroyed) return;
-      try {
-        pollTimer = setInterval(() => {
-          if (!destroyed) {
-            try {
-              savedCallback.current();
-            } catch (e) {
-              console.error('[useSSE] Polling callback error:', e);
-            }
+      pollTimer = setInterval(() => {
+        if (!destroyed) {
+          try {
+            savedCallback.current();
+          } catch (e) {
+            console.error('[useSSE] Polling callback error:', e);
           }
-        }, fallbackPollingMs);
-      } catch (e) {
-        console.error('[useSSE] Failed to start polling:', e);
-      }
+        }
+      }, fallbackPollingMs);
     }
 
     function stopPolling() {
@@ -47,44 +44,55 @@ export function useSSE(
       }
     }
 
-    function connect() {
+    async function connect() {
       if (destroyed) return;
+      ctrl = new AbortController();
+
       try {
-        es = new EventSource(`/api/stream?token=${token}`);
-
-        es.onopen = () => {
-          if (destroyed) { es?.close(); return; }
-          reconnectAttempts = 0;
-          stopPolling();
-        };
-
-        for (const event of savedEvents.current) {
-          es.addEventListener(event, () => {
-            if (!destroyed) {
+        await fetchEventSource('/api/stream', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: ctrl.signal,
+          onopen: async (response) => {
+            if (destroyed) {
+              ctrl?.abort();
+              return;
+            }
+            if (response.ok) {
+              reconnectAttempts = 0;
+              stopPolling();
+            } else {
+              throw new Error(`SSE connection failed: ${response.status}`);
+            }
+          },
+          onmessage: (event) => {
+            if (destroyed) return;
+            if (savedEvents.current.includes(event.event)) {
               try {
                 savedCallback.current();
               } catch (e) {
                 console.error('[useSSE] Event callback error:', e);
               }
             }
-          });
-        }
+          },
+          onerror: (err) => {
+            if (destroyed) return;
+            ctrl?.abort();
+            ctrl = null;
 
-        es.onerror = () => {
-          if (destroyed) return;
-          try { es?.close(); } catch {}
-          es = null;
-
-          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            reconnectAttempts++;
-            const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1);
-            reconnectTimer = setTimeout(() => {
-              if (!destroyed) connect();
-            }, delay);
-          } else {
-            startPolling();
-          }
-        };
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              reconnectAttempts++;
+              const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1);
+              reconnectTimer = setTimeout(() => {
+                if (!destroyed) connect();
+              }, delay);
+            } else {
+              startPolling();
+            }
+          },
+        });
       } catch {
         if (!destroyed) startPolling();
       }
@@ -94,7 +102,7 @@ export function useSSE(
 
     return () => {
       destroyed = true;
-      try { es?.close(); } catch {}
+      ctrl?.abort();
       if (reconnectTimer) clearTimeout(reconnectTimer);
       stopPolling();
     };

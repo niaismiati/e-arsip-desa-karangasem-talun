@@ -1,6 +1,7 @@
 import { Building2, Upload, Save, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useSSE } from '../../hooks/useSSE';
+import { api } from '../../services/api';
 
 const DEFAULT_FORM = {
   namaDesa: 'Desa Karangasem',
@@ -36,32 +37,24 @@ export function ProfilDesa() {
 
   async function fetchProfil() {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const res = await fetch('/api/profil-desa', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.get('/profil-desa');
       if (data.success && data.data) {
+        const p = data.data as any;
         setFormData({
-          namaDesa: data.data.nama_desa || '',
-          kecamatan: data.data.kecamatan || '',
-          kabupaten: data.data.kabupaten || '',
-          provinsi: data.data.provinsi || '',
-          kodeDesa: data.data.kode_desa || '',
-          alamat: data.data.alamat || '',
-          telepon: data.data.telepon || '',
-          email: data.data.email || '',
-          inisialDesa: data.data.inisial_desa || '',
-          kodeSurat: data.data.kode_surat_default || '',
-          pemisah: data.data.pemisah || '/',
-          panjangNomor: String(data.data.panjang_nomor || 3)
+          namaDesa: p.nama_desa || '',
+          kecamatan: p.kecamatan || '',
+          kabupaten: p.kabupaten || '',
+          provinsi: p.provinsi || '',
+          kodeDesa: p.kode_desa || '',
+          alamat: p.alamat || '',
+          telepon: p.telepon || '',
+          email: p.email || '',
+          inisialDesa: p.inisial_desa || '',
+          kodeSurat: p.kode_surat_default || '',
+          pemisah: p.pemisah || '/',
+          panjangNomor: String(p.panjang_nomor || 3)
         });
-        if (data.data.logo) setLogoPreview(data.data.logo);
+        if (p.logo) setLogoPreview(p.logo);
       }
     } catch {
       setError('Gagal memuat profil desa');
@@ -76,9 +69,6 @@ export function ProfilDesa() {
     setError('');
     setSuccess('');
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('Silakan login ulang');
-
       const body = new FormData();
       body.append('nama_desa', formData.namaDesa);
       body.append('kecamatan', formData.kecamatan);
@@ -94,23 +84,14 @@ export function ProfilDesa() {
       body.append('panjang_nomor', formData.panjangNomor);
       if (logoFile) body.append('logo', logoFile);
 
-      const res = await fetch('/api/profil-desa', {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.upload('/profil-desa', 'PUT', body);
       if (data.success) {
         setSuccess('Profil desa berhasil diperbarui!');
-        if (data.data?.logo) setLogoPreview(data.data.logo);
+        if ((data.data as any)?.logo) setLogoPreview((data.data as any).logo);
         setLogoFile(null);
         setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError(data.message || 'Gagal menyimpan profil');
+        setError((data.message as string) || 'Gagal menyimpan profil');
       }
     } catch (err) {
       setError((err as Error).message || 'Gagal menyimpan profil');

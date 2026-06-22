@@ -1,6 +1,7 @@
 import { Plus, Edit, Trash2, X, User, AlertCircle, Key, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useSSE } from '../../hooks/useSSE';
+import { api } from '../../services/api';
 
 interface UserData {
   id: number;
@@ -28,24 +29,16 @@ export function KelolaUser() {
   const [showPassword, setShowPassword] = useState(false);
   const [showKonfirmasi, setShowKonfirmasi] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const token = localStorage.getItem('token') || '';
 
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/users', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.get('/users');
       if (data.success) {
-        setUsers(data.data);
+        setUsers(data.data as any[]);
         setError('');
       } else {
-        setError(data.message || 'Gagal load users');
+        setError((data.message as string) || 'Gagal load users');
       }
     } catch (err) {
       setError('Gagal load users: ' + (err as Error).message);
@@ -82,9 +75,9 @@ export function KelolaUser() {
     }
 
     try {
-      const url = editingId ? `/api/users/${editingId}` : '/api/users';
-      const method = editingId ? 'PUT' : 'POST';
-      const body: any = {
+      const url = editingId ? `/users/${editingId}` : '/users';
+      const method = editingId ? 'put' as const : 'post' as const;
+      const body: Record<string, unknown> = {
         nama: formData.nama,
         email: formData.email,
         role: formData.role,
@@ -93,27 +86,17 @@ export function KelolaUser() {
         body.password = formData.password;
       }
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
-      
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = method === 'post'
+        ? await api.post(url, body)
+        : await api.put(url, body);
+
       if (data.success) {
         await loadUsers();
         setShowModal(false);
         setEditingId(null);
         setFormData({ nama: '', email: '', password: '', konfirmasiPassword: '', role: 'operator' });
       } else {
-        setError(data.message || 'Gagal menyimpan user');
+        setError((data.message as string) || 'Gagal menyimpan user');
       }
     } catch (err) {
       setError('Error: ' + (err as Error).message);
@@ -124,19 +107,11 @@ export function KelolaUser() {
     if (!confirm('Yakin ingin menghapus pengguna ini?')) return;
     
     try {
-      const res = await fetch(`/api/users/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.delete(`/users/${id}`);
       if (data.success) {
         await loadUsers();
       } else {
-        setError(data.message || 'Gagal hapus user');
+        setError((data.message as string) || 'Gagal hapus user');
       }
     } catch (err) {
       setError('Error: ' + (err as Error).message);
@@ -161,25 +136,13 @@ export function KelolaUser() {
       return;
     }
     try {
-      const res = await fetch(`/api/users/${resetPassword.id}/password`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ password: newPassword })
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.patch(`/users/${resetPassword.id}/password`, { password: newPassword });
       if (data.success) {
         setResetPassword(null);
         setNewPassword('');
         setError('');
       } else {
-        setError(data.message || 'Gagal reset password');
+        setError((data.message as string) || 'Gagal reset password');
       }
     } catch (err) {
       setError('Error: ' + (err as Error).message);
@@ -190,22 +153,11 @@ export function KelolaUser() {
     const newStatus = user.status === 'Aktif' ? 'Nonaktif' : 'Aktif';
     if (!confirm(`Yakin ingin ${newStatus === 'Nonaktif' ? 'menonaktifkan' : 'mengaktifkan'} pengguna ${user.nama}?`)) return;
     try {
-      const res = await fetch(`/api/users/${user.id}/toggle-active`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.patch(`/users/${user.id}/toggle-active`);
       if (data.success) {
         await loadUsers();
       } else {
-        setError(data.message || 'Gagal mengubah status');
+        setError((data.message as string) || 'Gagal mengubah status');
       }
     } catch (err) {
       setError('Error: ' + (err as Error).message);

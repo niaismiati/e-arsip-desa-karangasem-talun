@@ -5,7 +5,7 @@ node_modules/
 dist/
 
 # Environment variables
-.env
+**/.env
 .env.local
 .env.*.local
 
@@ -35,6 +35,14 @@ coverage/
 .pnpm-store/
 
 # Server logs
+*.log
+*.err
 *.txt
 server_out.txt
 server_err.txt
+
+# Uploaded files
+uploads/
+
+# Exposed JWT token
+token.txt

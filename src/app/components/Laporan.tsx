@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Download, Calendar, Mail, Send, BarChart3, AlertCircle } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
+import { api } from '../../services/api';
 
 interface RekapItem {
   klasifikasi_id: number;
@@ -28,8 +29,6 @@ export function Laporan() {
   const [bulan, setBulan] = useState('');
   const [jenis, setJenis] = useState('semua');
 
-  const token = localStorage.getItem('token') || '';
-
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
 
@@ -55,23 +54,15 @@ export function Laporan() {
   const loadRekap = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.append('tahun', tahun);
-      if (bulan) params.append('bulan', bulan);
-      params.append('jenis', jenis);
+      const params: Record<string, string> = { tahun };
+      if (bulan) params.bulan = bulan;
+      params.jenis = jenis;
 
-      const res = await fetch(`/api/laporan/rekap?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.get('/laporan/rekap', params);
       if (data.success) {
-        setRekapData(data.data.rekap);
+        setRekapData((data.data as any).rekap);
       } else {
-        setError(data.message);
+        setError(data.message as string);
       }
     } catch {
       setError('Gagal memuat data');
@@ -82,16 +73,9 @@ export function Laporan() {
 
   const loadStatistik = async () => {
     try {
-      const res = await fetch(`/api/laporan/statistik-bulanan?tahun=${tahun}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.get('/laporan/statistik-bulanan', { tahun });
       if (data.success) {
-        setStatistikData(data.data);
+        setStatistikData(data.data as any[]);
       }
     } catch {
       console.error('Gagal memuat statistik');

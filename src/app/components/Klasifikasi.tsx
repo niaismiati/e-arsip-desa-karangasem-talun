@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Pencil, Trash2, Eye, X, AlertCircle, Folder, Archive } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
+import { api } from '../../services/api';
 
 interface KlasifikasiItem {
   id: number;
@@ -26,22 +27,12 @@ export function Klasifikasi() {
     keterangan: '',
   });
 
-  const token = localStorage.getItem('token') || '';
-
   const loadData = async () => {
     setLoading(true);
     try {
-      const params = search ? `?search=${encodeURIComponent(search)}` : '';
-      const res = await fetch(`/api/klasifikasi${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      if (data.success) setItems(data.data);
-      else setError(data.message);
+      const data = await api.get('/klasifikasi', search ? { search } : undefined);
+      if (data.success) setItems(data.data as any[]);
+      else setError(data.message as string);
     } catch {
       setError('Gagal memuat data');
     } finally {
@@ -60,28 +51,18 @@ export function Klasifikasi() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const url = editingId ? `/api/klasifikasi/${editingId}` : '/api/klasifikasi';
-      const method = editingId ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const url = editingId ? `/klasifikasi/${editingId}` : '/klasifikasi';
+      const method = editingId ? 'put' as const : 'post' as const;
+      const data = method === 'post'
+        ? await api.post(url, form as any)
+        : await api.put(url, form as any);
       if (data.success) {
         setShowForm(false);
         setEditingId(null);
         setForm({ kode: '', nama: '', keterangan: '' });
         loadData();
       } else {
-        setError(data.message || 'Gagal menyimpan');
+        setError((data.message as string) || 'Gagal menyimpan');
       }
     } catch {
       setError('Terjadi kesalahan');
@@ -91,20 +72,12 @@ export function Klasifikasi() {
   const handleDelete = async () => {
     if (!deleteItem) return;
     try {
-      const res = await fetch(`/api/klasifikasi/${deleteItem.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.delete(`/klasifikasi/${deleteItem.id}`);
       if (data.success) {
         setDeleteItem(null);
         loadData();
       } else {
-        setError(data.message || 'Gagal menghapus');
+        setError((data.message as string) || 'Gagal menghapus');
       }
     } catch {
       setError('Terjadi kesalahan');

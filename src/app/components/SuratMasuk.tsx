@@ -1,6 +1,7 @@
 import { Plus, Search, Edit, Trash2, Download, FileText, X, Mail } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useSSE } from '../../hooks/useSSE';
+import { api } from '../../services/api';
 
 interface Surat {
   id: number;
@@ -41,18 +42,9 @@ export function SuratMasuk() {
   // Fetch klasifikasi
   const fetchKlasifikasi = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const res = await fetch('/api/klasifikasi', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.get('/klasifikasi');
       if (data.success) {
-        setKlasifikasiList(data.data);
+        setKlasifikasiList(data.data as any[]);
       }
     } catch (err) {
       console.error('Gagal load klasifikasi:', err);
@@ -63,23 +55,9 @@ export function SuratMasuk() {
   const fetchSurat = useCallback(async (queryParams?: Record<string, string>) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Token tidak ditemukan. Silakan login ulang.');
-        return;
-      }
-      const params = new URLSearchParams(queryParams || {});
-      const url = `/api/surat-masuk${params.toString() ? `?${params.toString()}` : ''}`;
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${response.status}`);
-      }
-      const data = await response.json();
+      const data = await api.get('/surat-masuk', queryParams);
       if (data.success) {
-        setSuratList((data.data as any[]).map((s): Surat => ({
+        setSuratList((data.data as any[]).map((s: any): Surat => ({
           id: s.id,
           nomor_surat: s.nomor_surat,
           asal: s.asal_surat,
@@ -96,7 +74,7 @@ export function SuratMasuk() {
         })));
         setError('');
       } else {
-        setError(data.message || 'Gagal load data');
+        setError((data.message as string) || 'Gagal load data');
       }
     } catch (err) {
       setError('Gagal load surat masuk: ' + (err as Error).message);
@@ -142,9 +120,6 @@ export function SuratMasuk() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('Silakan login ulang');
-      
       const formDataToSend = new FormData();
       formDataToSend.append('nomor_surat', formData.nomor);
       formDataToSend.append('asal_surat', formData.asal);
@@ -154,19 +129,10 @@ export function SuratMasuk() {
       formDataToSend.append('klasifikasi_id', formData.klasifikasi);
       if (lampiranFile) formDataToSend.append('lampiran', lampiranFile);
       
-      const url = editingId ? `/api/surat-masuk/${editingId}` : '/api/surat-masuk';
+      const url = editingId ? `/surat-masuk/${editingId}` : '/surat-masuk';
       const method = editingId ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
-        method,
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formDataToSend
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${response.status}`);
-      }
-      const data = await response.json();
+      const data = await api.upload(url, method, formDataToSend);
       if (data.success) {
         await fetchSurat({ search: searchTerm, ...filters });
         setShowModal(false);
@@ -176,7 +142,7 @@ export function SuratMasuk() {
         });
         setLampiranFile(null);
       } else {
-        setError(data.message);
+        setError(data.message as string);
       }
     } catch (err) {
       setError('Gagal: ' + (err as Error).message);
@@ -188,20 +154,11 @@ export function SuratMasuk() {
   const handleDelete = async (id: number) => {
     if (!confirm('Yakin hapus surat ini?')) return;
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/surat-masuk/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.delete(`/surat-masuk/${id}`);
       if (data.success) {
         await fetchSurat({ search: searchTerm, ...filters });
       } else {
-        setError(data.message);
+        setError(data.message as string);
       }
     } catch (err) {
       setError('Gagal hapus: ' + (err as Error).message);

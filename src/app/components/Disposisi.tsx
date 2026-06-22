@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, Plus, Eye, X, CheckCircle, AlertCircle, User } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
+import { api } from '../../services/api';
 
 interface DisposisiItem {
   id: number;
@@ -60,26 +61,16 @@ export function Disposisi({ userRole }: DisposisiProps) {
     batas_waktu: '',
   });
 
-  const token = localStorage.getItem('token') || '';
-
   const loadData = async () => {
     setLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (filterStatus) params.append('status', filterStatus);
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
+      if (filterStatus) params.status = filterStatus;
 
-      const res = await fetch(`/api/disposisi?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      if (data?.data) setItems(data.data);
+      const data = await api.get('/disposisi', params);
+      if (data?.data) setItems(data.data as any[]);
       else setItems([]);
     } catch (e: any) {
       setError(e?.message || 'Gagal memuat data');
@@ -90,15 +81,8 @@ export function Disposisi({ userRole }: DisposisiProps) {
 
   const loadSuratMasuk = async () => {
     try {
-      const res = await fetch('/api/surat-masuk?status=' + encodeURIComponent('Belum Disposisi'), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      if (data?.data) setSuratMasukList(data.data);
+      const data = await api.get('/surat-masuk', { status: 'Belum Disposisi' });
+      if (data?.data) setSuratMasukList(data.data as any[]);
     } catch (e) {
       console.error('Gagal load surat masuk untuk disposisi:', e);
     }
@@ -106,15 +90,8 @@ export function Disposisi({ userRole }: DisposisiProps) {
 
   const loadUsers = async () => {
     try {
-      const res = await fetch('/api/users', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      if (data?.data) setUserList(data.data);
+      const data = await api.get('/users');
+      if (data?.data) setUserList(data.data as any[]);
     } catch (e) {
       console.error('Gagal load user untuk disposisi:', e);
     }
@@ -140,30 +117,16 @@ export function Disposisi({ userRole }: DisposisiProps) {
     e.preventDefault();
     setError('');
     try {
-      const res = await fetch('/api/disposisi', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          surat_masuk_id: form.surat_masuk_id,
-          kepada_user_id: form.kepada_user_id,
-          instruksi: form.instruksi,
-          catatan: form.catatan || null,
-          batas_waktu: form.batas_waktu || null,
-        }),
+      const data = await api.post('/disposisi', {
+        surat_masuk_id: form.surat_masuk_id,
+        kepada_user_id: form.kepada_user_id,
+        instruksi: form.instruksi,
+        catatan: form.catatan || null,
+        batas_waktu: form.batas_waktu || null,
       });
 
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(data?.message || 'Gagal menyimpan');
-        return;
-      }
-
       setShowForm(false);
-            setForm({ surat_masuk_id: '', kepada_user_id: '', instruksi: '', catatan: '', batas_waktu: '' });
+      setForm({ surat_masuk_id: '', kepada_user_id: '', instruksi: '', catatan: '', batas_waktu: '' });
       await loadData();
     } catch (err: any) {
       setError(err?.message ? `Terjadi kesalahan: ${err.message}` : 'Terjadi kesalahan');
@@ -177,28 +140,14 @@ export function Disposisi({ userRole }: DisposisiProps) {
     try {
       setError('');
 
-      let endpoint = `/api/disposisi/${id}`;
+      let endpoint = `/disposisi/${id}`;
       if (newStatus === 'Disetujui') endpoint += '/approve';
       else if (newStatus === 'Selesai') endpoint += '/selesai';
       else if (newStatus === 'Ditolak') endpoint += '/reject';
 
       const body = catatan ? { catatan } : undefined;
 
-      const res = await fetch(endpoint, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(data?.message || 'Gagal mengubah status');
-        return;
-      }
+      const data = await api.patch(endpoint, body);
 
       await loadData();
       setDetailItem(null);

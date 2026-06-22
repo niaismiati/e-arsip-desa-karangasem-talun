@@ -145,7 +145,10 @@ async function initDatabase() {
 async function seedData() {
   const userCount = await db.get('SELECT COUNT(*) as count FROM users');
   if (userCount.count === 0) {
-    const hashedPassword = bcrypt.hashSync('password123', 10);
+    // WARNING: Ganti password default segera setelah deploy pertama!
+    // Set DEFAULT_USER_PASSWORD di .env untuk kustomisasi
+    const defaultPassword = process.env.DEFAULT_USER_PASSWORD || 'password123';
+    const hashedPassword = bcrypt.hashSync(defaultPassword, 12);
     await db.run(
       'INSERT INTO users (nama, email, password, role, status) VALUES (?, ?, ?, ?, ?)',
       ['Admin Sistem', 'admin@karangasem.desa.id', hashedPassword, 'admin', 'Aktif']

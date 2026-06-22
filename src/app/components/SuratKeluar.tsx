@@ -1,6 +1,7 @@
   import { useState, useEffect } from 'react';
   import { Search, Plus, Pencil, Trash2, Eye, X, Download, AlertCircle, Upload, RefreshCw } from 'lucide-react';
   import { useSSE } from '../../hooks/useSSE';
+  import { api } from '../../services/api';
 
   interface SuratKeluarItem {
     id: number;
@@ -39,25 +40,15 @@
     const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const [autoSaveTimer, setAutoSaveTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
-    const token = localStorage.getItem('token') || '';
-
     const loadData = async () => {
       setLoading(true);
       try {
-        const queryParams = new URLSearchParams();
-        if (search) queryParams.append('search', search);
-        if (filterKlasifikasi) queryParams.append('klasifikasi', filterKlasifikasi);
-        const qs = queryParams.toString();
-        const res = await fetch(`/api/surat-keluar${qs ? `?${qs}` : ''}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          throw new Error(errData?.message || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        if (data.success) setItems(data.data);
-        else setError(data.message);
+        const params: Record<string, string> = {};
+        if (search) params.search = search;
+        if (filterKlasifikasi) params.klasifikasi = filterKlasifikasi;
+        const data = await api.get('/surat-keluar', params);
+        if (data.success) setItems(data.data as any[]);
+        else setError(data.message as string);
       } catch {
         setError('Gagal memuat data');
       } finally {
@@ -67,17 +58,8 @@
 
     const loadKlasifikasi = async () => {
       try {
-        const token = localStorage.getItem('token') || '';
-        if (!token) return;
-        const res = await fetch('/api/klasifikasi', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          throw new Error(errData?.message || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        if (data.success) setKlasifikasiList(data.data);
+        const data = await api.get('/klasifikasi');
+        if (data.success) setKlasifikasiList(data.data as any[]);
       } catch {
         // ignore kelasifikasi loading errors for now
       }
@@ -96,15 +78,12 @@
     ], loadData, 30000);
 
     // Auto-save effect: debounce form changes and auto-save every 2 seconds
-    // Gunakan JSON.stringify untuk membandingkan form agar tidak infinite loop
     const formKey = JSON.stringify({ nomor_surat: form.nomor_surat, tujuan_surat: form.tujuan_surat, perihal: form.perihal, tanggal_surat: form.tanggal_surat, klasifikasi_id: form.klasifikasi_id });
     useEffect(() => {
-      if (!editingId || !showForm) return; // Only auto-save when editing
+      if (!editingId || !showForm) return;
       
-      // Clear previous timer
       if (autoSaveTimer) clearTimeout(autoSaveTimer);
       
-      // Set new timer for auto-save
       const timer = setTimeout(async () => {
         if (!editingId) return;
         
@@ -118,16 +97,7 @@
           if (form.klasifikasi_id) body.append('klasifikasi_id', form.klasifikasi_id);
           if (lampiranFile) body.append('lampiran', lampiranFile);
 
-          const res = await fetch(`/api/surat-keluar/${editingId}`, {
-            method: 'PUT',
-            headers: { Authorization: `Bearer ${token}` },
-            body,
-          });
-          if (!res.ok) {
-            const errData = await res.json().catch(() => null);
-            throw new Error(errData?.message || `HTTP ${res.status}`);
-          }
-          const data = await res.json();
+          const data = await api.upload(`/surat-keluar/${editingId}`, 'PUT', body);
           
           if (data.success) {
             setAutoSaveStatus('saved');
@@ -144,23 +114,16 @@
       setAutoSaveTimer(timer);
       return () => clearTimeout(timer);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formKey, lampiranFile, editingId, showForm, token]);
+    }, [formKey, lampiranFile, editingId, showForm]);
 
     const generateNomor = async () => {
       setGenerating(true);
       try {
-        const res = await fetch('/api/surat-keluar/generate-nomor', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          throw new Error(errData?.message || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
+        const data = await api.get('/surat-keluar/generate-nomor');
         if (data.success) {
-          setForm((prev) => ({ ...prev, nomor_surat: data.data.nomor }));
+          setForm((prev) => ({ ...prev, nomor_surat: (data.data as any).nomor }));
         } else {
-          setError(data.message || 'Gagal generate nomor');
+          setError((data.message as string) || 'Gagal generate nomor');
         }
       } catch {
         setError('Gagal generate nomor');
@@ -184,14 +147,9 @@
       if (lampiranFile) body.append('lampiran', lampiranFile);
 
       try {
-        const url = editingId ? `/api/surat-keluar/${editingId}` : '/api/surat-keluar';
+        const url = editingId ? `/surat-keluar/${editingId}` : '/surat-keluar';
         const method = editingId ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          throw new Error(errData?.message || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
+        const data = await api.upload(url, method, body);
         if (data.success) {
           setShowForm(false);
           setEditingId(null);
@@ -199,7 +157,7 @@
           setLampiranFile(null);
           loadData();
         } else {
-          setError(data.message || 'Gagal menyimpan');
+          setError((data.message as string) || 'Gagal menyimpan');
         }
       } catch {
         setError('Terjadi kesalahan');
@@ -209,20 +167,12 @@
     const handleDelete = async () => {
       if (!deleteItem) return;
       try {
-        const res = await fetch(`/api/surat-keluar/${deleteItem.id}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          throw new Error(errData?.message || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
+        const data = await api.delete(`/surat-keluar/${deleteItem.id}`);
         if (data.success) {
           setDeleteItem(null);
           loadData();
         } else {
-          setError(data.message || 'Gagal menghapus');
+          setError((data.message as string) || 'Gagal menghapus');
         }
       } catch {
         setError('Terjadi kesalahan');

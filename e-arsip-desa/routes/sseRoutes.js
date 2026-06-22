@@ -7,11 +7,12 @@ const router = express.Router();
 
 router.get('/stream', (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : req.query.token;
 
-  if (!token) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ success: false, message: 'Token required' });
   }
+
+  const token = authHeader.slice(7);
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
