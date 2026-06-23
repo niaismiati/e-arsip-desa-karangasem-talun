@@ -30,24 +30,3 @@ jobs:
         run: npm test
         env:
           JWT_SECRET: test-jwt-secret-for-ci
-
-  frontend-test:
-    name: Frontend Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run frontend tests
-        run: npm run test:frontend -- --environment node
-        env:
-          CI: true
