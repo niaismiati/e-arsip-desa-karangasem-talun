@@ -11,7 +11,8 @@ exports.getProfil = async (req, res) => {
     }
     res.json({ success: true, data: profil });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -32,7 +33,7 @@ exports.updateProfil = async (req, res) => {
 
     if (req.file && profil.logo) {
       const oldPath = path.join(__dirname, '..', profil.logo);
-      try { fs.unlinkSync(oldPath); } catch {}
+      try { fs.unlinkSync(oldPath); } catch (e) { console.error('Gagal hapus logo lama:', e); }
     }
 
     await db.run(
@@ -71,7 +72,8 @@ exports.updateProfil = async (req, res) => {
     broadcast('profil:updated', updated);
     res.json({ success: true, message: 'Profil desa berhasil diperbarui.', data: updated });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -105,6 +107,7 @@ exports.getFormatNomor = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };

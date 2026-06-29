@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Pencil, Trash2, Eye, X, AlertCircle, Folder, Archive } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Eye, X, AlertCircle, Archive } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
 import { api } from '../../services/api';
 
@@ -52,10 +52,9 @@ export function Klasifikasi() {
     e.preventDefault();
     try {
       const url = editingId ? `/klasifikasi/${editingId}` : '/klasifikasi';
-      const method = editingId ? 'put' as const : 'post' as const;
-      const data = method === 'post'
-        ? await api.post(url, form as any)
-        : await api.put(url, form as any);
+      const data = editingId
+        ? await api.put(url, form as any)
+        : await api.post(url, form as any);
       if (data.success) {
         setShowForm(false);
         setEditingId(null);

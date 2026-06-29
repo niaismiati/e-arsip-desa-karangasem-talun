@@ -1,4 +1,4 @@
-  import { useState, useEffect } from 'react';
+  import { useState, useEffect, useRef } from 'react';
   import { Search, Plus, Pencil, Trash2, Eye, X, Download, AlertCircle, Upload, RefreshCw } from 'lucide-react';
   import { useSSE } from '../../hooks/useSSE';
   import { api } from '../../services/api';
@@ -38,7 +38,7 @@
     const [lampiranFile, setLampiranFile] = useState<File | null>(null);
     const [generating, setGenerating] = useState(false);
     const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-    const [autoSaveTimer, setAutoSaveTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+    const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const loadData = async () => {
       setLoading(true);
@@ -82,9 +82,9 @@
     useEffect(() => {
       if (!editingId || !showForm) return;
       
-      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
       
-      const timer = setTimeout(async () => {
+      autoSaveTimerRef.current = setTimeout(async () => {
         if (!editingId) return;
         
         setAutoSaveStatus('saving');
@@ -111,8 +111,7 @@
         }
       }, 2000);
       
-      setAutoSaveTimer(timer);
-      return () => clearTimeout(timer);
+      return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formKey, lampiranFile, editingId, showForm]);
 

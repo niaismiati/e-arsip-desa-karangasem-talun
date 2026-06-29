@@ -3,8 +3,8 @@ const router = express.Router();
 const disposisiController = require('../controllers/disposisiController');
 const { verifyToken, checkRole } = require('../middleware/auth');
 
-router.get('/', verifyToken, disposisiController.getAll);
-router.get('/:id', verifyToken, disposisiController.getById);
+router.get('/', verifyToken, checkRole(['admin', 'operator', 'kades']), disposisiController.getAll);
+router.get('/:id', verifyToken, checkRole(['admin', 'operator', 'kades']), disposisiController.getById);
 router.post('/', verifyToken, checkRole(['operator']), disposisiController.create);
 router.put('/:id', verifyToken, checkRole(['operator']), disposisiController.update);
 router.patch('/:id/approve', verifyToken, checkRole(['kades']), disposisiController.approve);

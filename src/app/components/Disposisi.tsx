@@ -72,8 +72,8 @@ export function Disposisi({ userRole }: DisposisiProps) {
       const data = await api.get('/disposisi', params);
       if (data?.data) setItems(data.data as any[]);
       else setItems([]);
-    } catch (e: any) {
-      setError(e?.message || 'Gagal memuat data');
+    } catch {
+      setError('Gagal memuat data');
     } finally {
       setLoading(false);
     }
@@ -128,8 +128,8 @@ export function Disposisi({ userRole }: DisposisiProps) {
       setShowForm(false);
       setForm({ surat_masuk_id: '', kepada_user_id: '', instruksi: '', catatan: '', batas_waktu: '' });
       await loadData();
-    } catch (err: any) {
-      setError(err?.message ? `Terjadi kesalahan: ${err.message}` : 'Terjadi kesalahan');
+    } catch {
+      setError('Terjadi kesalahan');
     }
   };
 
@@ -137,24 +137,23 @@ export function Disposisi({ userRole }: DisposisiProps) {
   const [statusCatatan, setStatusCatatan] = useState('');
 
   const handleStatusChange = async (id: number, newStatus: StatusBackend, catatan?: string) => {
+    setError('');
+    let endpoint = `/disposisi/${id}`;
+    if (newStatus === 'Disetujui') endpoint += '/approve';
+    else if (newStatus === 'Selesai') endpoint += '/selesai';
+    else if (newStatus === 'Ditolak') endpoint += '/reject';
+
+    const body = catatan ? { catatan } : undefined;
+
     try {
-      setError('');
-
-      let endpoint = `/disposisi/${id}`;
-      if (newStatus === 'Disetujui') endpoint += '/approve';
-      else if (newStatus === 'Selesai') endpoint += '/selesai';
-      else if (newStatus === 'Ditolak') endpoint += '/reject';
-
-      const body = catatan ? { catatan } : undefined;
-
-      const data = await api.patch(endpoint, body);
-
+      await api.patch(endpoint, body);
       await loadData();
+    } catch {
+      setError('Terjadi kesalahan');
+    } finally {
       setDetailItem(null);
       setStatusAction(null);
       setStatusCatatan('');
-    } catch (err: any) {
-      setError(err?.message ? `Terjadi kesalahan: ${err.message}` : 'Terjadi kesalahan');
     }
   };
 
@@ -186,21 +185,6 @@ export function Disposisi({ userRole }: DisposisiProps) {
     { label: 'Ditolak', value: 'Ditolak' },
     { label: 'Selesai', value: 'Selesai' },
   ];
-
-  const uiStatusLabel = (backendStatus: string) => {
-    switch (backendStatus) {
-      case 'Menunggu':
-        return 'Menunggu';
-      case 'Disetujui':
-        return 'Disetujui';
-      case 'Ditolak':
-        return 'Ditolak';
-      case 'Selesai':
-        return 'Selesai';
-      default:
-        return backendStatus;
-    }
-  };
 
   return (
     <div className="p-6 space-y-6">
@@ -311,7 +295,7 @@ export function Disposisi({ userRole }: DisposisiProps) {
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(item.status)}`}
                     >
-                      {uiStatusLabel(item.status)}
+                      {item.status}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -476,7 +460,7 @@ export function Disposisi({ userRole }: DisposisiProps) {
               <p className="text-sm">
                 <span className="text-gray-600">Status:</span>{' '}
                 <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(detailItem.status)}`}>
-                  {uiStatusLabel(detailItem.status)}
+                  {detailItem.status}
                 </span>
               </p>
 

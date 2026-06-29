@@ -329,7 +329,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div style={{ borderTop: '1px solid #334155', marginTop: 40, padding: '20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>&copy; 2025 E-Arsip Desa Karangasem. All rights reserved.</p>
+            <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>&copy; 2026 E-Arsip Desa Karangasem. All rights reserved.</p>
             <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Dikembangkan untuk mendukung transformasi digital desa <span style={{ color: '#EF4444' }}><i className="fa-solid fa-heart"></i></span></p>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { Building2, Upload, Save, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSSE } from '../../hooks/useSSE';
 import { api } from '../../services/api';
 
@@ -26,6 +26,7 @@ export function ProfilDesa() {
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const prevLogoUrlRef = useRef('');
 
   useEffect(() => {
     fetchProfil();
@@ -108,10 +109,19 @@ export function ProfilDesa() {
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      if (prevLogoUrlRef.current) URL.revokeObjectURL(prevLogoUrlRef.current);
+      const url = URL.createObjectURL(e.target.files[0]);
+      prevLogoUrlRef.current = url;
       setLogoFile(e.target.files[0]);
-      setLogoPreview(URL.createObjectURL(e.target.files[0]));
+      setLogoPreview(url);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (prevLogoUrlRef.current) URL.revokeObjectURL(prevLogoUrlRef.current);
+    };
+  }, []);
 
   return (
     <div className="p-6 space-y-6">

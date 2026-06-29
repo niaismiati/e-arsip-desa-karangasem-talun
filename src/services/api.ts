@@ -2,8 +2,13 @@ class ApiError extends Error {
   status: number;
   data: unknown;
 
-  constructor(message: string, status: number, data?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    data?: unknown
+  ) {
     super(message);
+
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
@@ -22,56 +27,117 @@ async function request<T>(
     timeout?: number;
   },
 ): Promise<T> {
-  const token = localStorage.getItem('token');
-  const headers: Record<string, string> = {};
+  const token =
+    localStorage.getItem('token');
+
+  const headers: Record<
+    string,
+    string
+  > = {};
 
   if (!options?.formData) {
-    headers['Content-Type'] = 'application/json';
+    headers['Content-Type'] =
+      'application/json';
   }
+
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] =
+      `Bearer ${token}`;
   }
 
   let url = `${BASE_URL}${path}`;
+
   if (options?.params) {
-    const qs = new URLSearchParams(options.params).toString();
-    if (qs) url += `?${qs}`;
+    const qs =
+      new URLSearchParams(
+        options.params
+      ).toString();
+
+    if (qs) {
+      url += `?${qs}`;
+    }
   }
 
-  const controller = new AbortController();
-  const timeoutMs = options?.timeout ?? 30000;
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const controller =
+    new AbortController();
+
+  const timeoutMs =
+    options?.timeout ?? 30000;
+
+  const timeoutId =
+    setTimeout(
+      () => controller.abort(),
+      timeoutMs
+    );
 
   let res: Response;
+
   try {
     res = await fetch(url, {
       method,
       headers,
-      body: options?.formData ?? (options?.body ? JSON.stringify(options.body) : undefined),
-      signal: controller.signal,
+
+      body:
+        options?.formData ??
+        (
+          options?.body
+            ? JSON.stringify(
+                options.body
+              )
+            : undefined
+        ),
+
+      signal:
+        controller.signal,
     });
-  } catch (err: unknown) {
+  } catch (err) {
     clearTimeout(timeoutId);
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new ApiError('Waktu permintaan habis. Silakan coba lagi.', 0);
+
+    if (
+      err instanceof
+        DOMException &&
+      err.name === 'AbortError'
+    ) {
+      throw new ApiError(
+        'Waktu permintaan habis. Silakan coba lagi.',
+        0
+      );
     }
-    throw new ApiError('Gagal terhubung ke server. Pastikan server backend berjalan.', 0);
+
+    throw new ApiError(
+      'Gagal terhubung ke server. Pastikan server backend berjalan.',
+      0
+    );
   } finally {
     clearTimeout(timeoutId);
   }
 
-  let json: Record<string, unknown>;
+  let json: Record<
+    string,
+    unknown
+  > = {};
+
   try {
-    json = await res.json();
+    const text =
+      await res.text();
+
+    if (text) {
+      json =
+        JSON.parse(text);
+    }
   } catch {
-    throw new ApiError('Respons server tidak valid.', res.status);
+    throw new ApiError(
+      `Server mengirim respons yang tidak bisa dibaca (HTTP ${res.status})`,
+      res.status
+    );
   }
 
-  if (!res.ok || json?.success === false) {
+  if (!res.ok) {
     throw new ApiError(
-      (json?.message as string) || `HTTP ${res.status}`,
+      (json?.message as string) ||
+        `HTTP ${res.status}`,
       res.status,
-      json,
+      json
     );
   }
 
@@ -79,35 +145,112 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T = { success: boolean; data: unknown }>(
+  get: <
+    T = {
+      success: boolean;
+      data: unknown;
+      message?: string;
+    }
+  >(
     path: string,
-    params?: Record<string, string>,
-  ) => request<T>('GET', path, { params }),
+    params?: Record<
+      string,
+      string
+    >
+  ) =>
+    request<T>(
+      'GET',
+      path,
+      { params }
+    ),
 
-  post: <T = { success: boolean; data: unknown }>(
+  post: <
+    T = {
+      success: boolean;
+      data: unknown;
+      message?: string;
+    }
+  >(
     path: string,
-    body?: Record<string, unknown>,
-  ) => request<T>('POST', path, { body }),
+    body?: Record<
+      string,
+      unknown
+    >
+  ) =>
+    request<T>(
+      'POST',
+      path,
+      { body }
+    ),
 
-  put: <T = { success: boolean; data: unknown }>(
+  put: <
+    T = {
+      success: boolean;
+      data: unknown;
+      message?: string;
+    }
+  >(
     path: string,
-    body?: Record<string, unknown>,
-  ) => request<T>('PUT', path, { body }),
+    body?: Record<
+      string,
+      unknown
+    >
+  ) =>
+    request<T>(
+      'PUT',
+      path,
+      { body }
+    ),
 
-  patch: <T = { success: boolean; data: unknown }>(
+  patch: <
+    T = {
+      success: boolean;
+      data: unknown;
+      message?: string;
+    }
+  >(
     path: string,
-    body?: Record<string, unknown>,
-  ) => request<T>('PATCH', path, { body }),
+    body?: Record<
+      string,
+      unknown
+    >
+  ) =>
+    request<T>(
+      'PATCH',
+      path,
+      { body }
+    ),
 
-  delete: <T = { success: boolean; data: unknown }>(
-    path: string,
-  ) => request<T>('DELETE', path),
+  delete: <
+    T = {
+      success: boolean;
+      data: unknown;
+      message?: string;
+    }
+  >(
+    path: string
+  ) =>
+    request<T>(
+      'DELETE',
+      path
+    ),
 
-  upload: <T = { success: boolean; data: unknown }>(
+  upload: <
+    T = {
+      success: boolean;
+      data: unknown;
+      message?: string;
+    }
+  >(
     path: string,
     method: string,
-    formData: FormData,
-  ) => request<T>(method, path, { formData }),
+    formData: FormData
+  ) =>
+    request<T>(
+      method,
+      path,
+      { formData }
+    ),
 };
 
 export { ApiError };

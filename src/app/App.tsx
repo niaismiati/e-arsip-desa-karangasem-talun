@@ -135,7 +135,7 @@ export default function App() {
         if (saved && JSON.parse(saved).tema === 'system') {
           document.documentElement.classList.toggle('dark', e.matches);
         }
-      } catch {}
+      } catch { console.warn('Gagal baca tema dari system'); }
     };
     mql.addEventListener('change', handler);
 
@@ -218,7 +218,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.nama) return parsed.nama;
-      } catch {}
+      } catch (e) { console.warn('Gagal parse user dari localStorage:', e); }
     }
     switch (role) {
       case 'admin':

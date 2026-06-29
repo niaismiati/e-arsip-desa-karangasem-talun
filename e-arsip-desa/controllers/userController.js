@@ -11,7 +11,8 @@ exports.getAllUsers = async (req, res) => {
     );
     res.json({ success: true, data: users });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -29,7 +30,8 @@ exports.getUserById = async (req, res) => {
 
     res.json({ success: true, data: user });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -73,7 +75,8 @@ exports.createUser = async (req, res) => {
     broadcast('users:created', newUser);
     res.status(201).json({ success: true, message: 'Pengguna berhasil ditambahkan.', data: newUser });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -117,7 +120,8 @@ exports.updateUser = async (req, res) => {
     broadcast('users:updated', updated);
     res.json({ success: true, message: 'Pengguna berhasil diperbarui.', data: updated });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -160,7 +164,8 @@ exports.deleteUser = async (req, res) => {
     broadcast('users:deleted', { id: parseInt(id) });
     res.json({ success: true, message: 'Pengguna berhasil dihapus.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -188,7 +193,8 @@ exports.toggleActive = async (req, res) => {
     broadcast('users:toggle', { id: parseInt(id), status: newStatus });
     res.json({ success: true, message: `Pengguna berhasil ${newStatus === 'Aktif' ? 'diaktifkan' : 'dinonaktifkan'}.` });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -217,6 +223,7 @@ exports.changePassword = async (req, res) => {
     broadcast('users:password-changed', { id: parseInt(id) });
     res.json({ success: true, message: 'Password berhasil diubah.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };

@@ -49,7 +49,8 @@ exports.register = async (req, res) => {
       data: { user, token }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Register error:', error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -84,7 +85,8 @@ exports.login = async (req, res) => {
       data: { user: userWithoutPassword, token }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Login error:', error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -96,6 +98,7 @@ exports.getMe = async (req, res) => {
     }
     res.json({ success: true, data: user });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('GetMe error:', error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };

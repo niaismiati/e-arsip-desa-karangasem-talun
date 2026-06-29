@@ -1,4 +1,4 @@
-import { Plus, Search, Edit, Trash2, Download, FileText, X, Mail } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Download, FileText, X } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useSSE } from '../../hooks/useSSE';
 import { api } from '../../services/api';
@@ -37,7 +37,7 @@ export function SuratMasuk() {
   const [klasifikasiList, setKlasifikasiList] = useState<{id: string, kode: string, nama: string}[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [filters, setFilters] = useState({ klasifikasi: '', asal: '', status: '' });
-  const userRole = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}').role || ''; } catch { return ''; } })();
+  const userRole = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}').role || ''; } catch (e) { console.warn('Gagal parse user role:', e); return ''; } })();
 
   // Fetch klasifikasi
   const fetchKlasifikasi = useCallback(async () => {
@@ -169,25 +169,6 @@ export function SuratMasuk() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
-  const onSearchChange = (term: string) => {
-    setSearchTerm(term);
-  };
-
-  const statusLabel = (status: string) => {
-    switch (status) {
-      case 'Belum Disposisi':
-        return 'Belum Disposisi';
-      case 'Diproses':
-        return 'Diproses';
-      case 'Selesai':
-        return 'Selesai';
-      case 'Menunggu':
-        return 'Menunggu';
-      default:
-        return status;
-    }
-  };
-
   const filteredSurat = suratList;
 
   return (
@@ -294,7 +275,7 @@ export function SuratMasuk() {
                         ? 'bg-indigo-100 text-indigo-800'
                         : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {statusLabel(surat.status)}
+                      {surat.status}
                     </span>
                   </td>
                   <td className="px-6 py-4">

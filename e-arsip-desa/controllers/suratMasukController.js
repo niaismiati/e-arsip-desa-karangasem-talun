@@ -63,7 +63,8 @@ exports.getAll = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -82,7 +83,8 @@ exports.getById = async (req, res) => {
 
     res.json({ success: true, data: row });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -122,7 +124,8 @@ exports.create = async (req, res) => {
     broadcast('surat-masuk:created', newRow);
     res.status(201).json({ success: true, message: 'Surat masuk berhasil ditambahkan.', data: newRow });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -140,7 +143,7 @@ exports.update = async (req, res) => {
 
     if (req.file && existing.lampiran) {
       const oldPath = path.join(__dirname, '..', existing.lampiran);
-      try { fs.unlinkSync(oldPath); } catch {}
+      try { fs.unlinkSync(oldPath); } catch (e) { console.error('Gagal hapus file lama:', e); }
     }
 
     await db.run(
@@ -168,7 +171,8 @@ exports.update = async (req, res) => {
     broadcast('surat-masuk:updated', updated);
     res.json({ success: true, message: 'Surat masuk berhasil diperbarui.', data: updated });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -184,7 +188,7 @@ exports.delete = async (req, res) => {
 
     if (existing.lampiran) {
       const filePath = path.join(__dirname, '..', existing.lampiran);
-      try { fs.unlinkSync(filePath); } catch {}
+      try { fs.unlinkSync(filePath); } catch (e) { console.error('Gagal hapus file:', e); }
     }
 
     await db.run(
@@ -195,6 +199,7 @@ exports.delete = async (req, res) => {
     broadcast('surat-masuk:deleted', { id: parseInt(id) });
     res.json({ success: true, message: 'Surat masuk berhasil dihapus.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };

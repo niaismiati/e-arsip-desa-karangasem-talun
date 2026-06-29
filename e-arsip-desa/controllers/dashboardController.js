@@ -17,43 +17,59 @@ exports.getStats = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
 exports.getChartData = async (req, res) => {
   try {
     const now = new Date();
-    const result = [];
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
+    // Two aggregate queries instead of 12 individual queries
+    const masukRows = await db.all(
+      `SELECT YEAR(tanggal_surat) as tahun, MONTH(tanggal_surat) as bulan, COUNT(*) as total
+       FROM surat_masuk
+       WHERE tanggal_surat >= ?
+       GROUP BY YEAR(tanggal_surat), MONTH(tanggal_surat)
+       ORDER BY tahun, bulan`,
+      [sixMonthsAgo.toISOString().split('T')[0]]
+    );
+
+    const keluarRows = await db.all(
+      `SELECT YEAR(tanggal_surat) as tahun, MONTH(tanggal_surat) as bulan, COUNT(*) as total
+       FROM surat_keluar
+       WHERE tanggal_surat >= ?
+       GROUP BY YEAR(tanggal_surat), MONTH(tanggal_surat)
+       ORDER BY tahun, bulan`,
+      [sixMonthsAgo.toISOString().split('T')[0]]
+    );
+
+    const masukMap = {};
+    const keluarMap = {};
+    for (const r of masukRows) masukMap[`${r.tahun}-${r.bulan}`] = r.total;
+    for (const r of keluarRows) keluarMap[`${r.tahun}-${r.bulan}`] = r.total;
+
+    const result = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const month = d.getMonth() + 1;
+      const key = `${year}-${month}`;
       const monthName = d.toLocaleString('id-ID', { month: 'short' });
-
-      const masuk = await db.get(
-        `SELECT COUNT(*) as total FROM surat_masuk
-         WHERE YEAR(tanggal_surat) = ? AND MONTH(tanggal_surat) = ?`,
-        [year, parseInt(month)]
-      );
-
-      const keluar = await db.get(
-        `SELECT COUNT(*) as total FROM surat_keluar
-         WHERE YEAR(tanggal_surat) = ? AND MONTH(tanggal_surat) = ?`,
-        [year, parseInt(month)]
-      );
 
       result.push({
         bulan: monthName.charAt(0).toUpperCase() + monthName.slice(1),
-        masuk: masuk.total,
-        keluar: keluar.total
+        masuk: masukMap[key] || 0,
+        keluar: keluarMap[key] || 0
       });
     }
 
     res.json({ success: true, data: result });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -79,7 +95,8 @@ exports.getRecentLetters = async (req, res) => {
 
     res.json({ success: true, data: combined });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -99,27 +116,28 @@ exports.getPendingDisposisi = async (req, res) => {
 
     res.json({ success: true, data: rows });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
 exports.getKlasifikasiSummary = async (req, res) => {
   try {
-    const klasifikasiList = await db.all('SELECT id, kode, nama FROM klasifikasi ORDER BY kode ASC');
+    // Single query with LEFT JOIN + GROUP BY instead of looping per klasifikasi
+    const rows = await db.all(`
+      SELECT k.kode, k.nama,
+        COALESCE(sm.total, 0) + COALESCE(sk.total, 0) as count
+      FROM klasifikasi k
+      LEFT JOIN (SELECT klasifikasi_id, COUNT(*) as total FROM surat_masuk GROUP BY klasifikasi_id) sm ON k.id = sm.klasifikasi_id
+      LEFT JOIN (SELECT klasifikasi_id, COUNT(*) as total FROM surat_keluar GROUP BY klasifikasi_id) sk ON k.id = sk.klasifikasi_id
+      HAVING count > 0
+      ORDER BY k.kode ASC
+    `);
 
-    const result = [];
-    for (const k of klasifikasiList) {
-      const masuk = await db.get('SELECT COUNT(*) as total FROM surat_masuk WHERE klasifikasi_id = ?', [k.id]);
-      const keluar = await db.get('SELECT COUNT(*) as total FROM surat_keluar WHERE klasifikasi_id = ?', [k.id]);
-      const count = masuk.total + keluar.total;
-      if (count > 0) {
-        result.push({ kode: k.kode, nama: k.nama, count });
-      }
-    }
-
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: rows });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -135,6 +153,7 @@ exports.getAktivitas = async (req, res) => {
 
     res.json({ success: true, data: rows });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };

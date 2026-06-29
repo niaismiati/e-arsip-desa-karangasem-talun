@@ -26,10 +26,14 @@ describe('Dashboard Routes', () => {
   describe('GET /api/dashboard/chart', () => {
     test('should return chart data', async () => {
       mockDb.get.mockResolvedValueOnce(adminUser);
-      for (let i = 0; i < 6; i++) {
-        mockDb.get.mockResolvedValueOnce({ total: i + 1 });
-        mockDb.get.mockResolvedValueOnce({ total: i + 2 });
-      }
+      mockDb.all.mockResolvedValueOnce([
+        { tahun: 2026, bulan: 1, total: 2 },
+        { tahun: 2026, bulan: 2, total: 3 },
+      ]);
+      mockDb.all.mockResolvedValueOnce([
+        { tahun: 2026, bulan: 1, total: 4 },
+        { tahun: 2026, bulan: 2, total: 5 },
+      ]);
       const res = await request(app).get('/api/dashboard/chart').set(authHeader(generateTestToken()));
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(6);
@@ -59,9 +63,7 @@ describe('Dashboard Routes', () => {
   describe('GET /api/dashboard/klasifikasi-summary', () => {
     test('should return summary', async () => {
       mockDb.get.mockResolvedValueOnce(adminUser);
-      mockDb.all.mockResolvedValueOnce([{ id: 1, kode: '000', nama: 'Umum' }]);
-      mockDb.get.mockResolvedValueOnce({ total: 5 });
-      mockDb.get.mockResolvedValueOnce({ total: 3 });
+      mockDb.all.mockResolvedValueOnce([{ kode: '000', nama: 'Umum', count: 8 }]);
       const res = await request(app).get('/api/dashboard/klasifikasi-summary').set(authHeader(generateTestToken()));
       expect(res.status).toBe(200);
     });

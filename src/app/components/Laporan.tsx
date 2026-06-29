@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Calendar, Mail, Send, BarChart3, AlertCircle } from 'lucide-react';
+import { FileText, Download, Mail, Send, BarChart3, AlertCircle } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
 import { api } from '../../services/api';
 
@@ -60,7 +60,7 @@ export function Laporan() {
 
       const data = await api.get('/laporan/rekap', params);
       if (data.success) {
-        setRekapData((data.data as any).rekap);
+        setRekapData((data.data as any)?.rekap || []);
       } else {
         setError(data.message as string);
       }

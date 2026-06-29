@@ -9,37 +9,53 @@ app.use(express.json());
 app.use('/api/auth', require('../routes/authRoutes'));
 
 describe('Auth Routes', () => {
-  describe('POST /api/auth/register (unprotected)', () => {
+  const adminToken = generateTestToken();
+  const adminAuth = authHeader(adminToken);
+
+  describe('POST /api/auth/register (admin only)', () => {
     const validUser = { nama: 'Test User', email: 'test@test.com', password: 'password123', role: 'operator' };
 
+    beforeEach(() => {
+      // verifyToken + checkRole middleware: first get call resolves user
+      mockDb.get.mockReset();
+      mockDb.get.mockResolvedValue({ id: 1, nama: 'Admin', email: 'admin@test.com', role: 'admin', status: 'Aktif', avatar: null });
+      mockDb.run.mockResolvedValue({ lastInsertRowid: 2, changes: 1 });
+    });
+
     test('should register a new user successfully', async () => {
-      mockDb.get.mockResolvedValueOnce(undefined); // check existing email
-      mockDb.run.mockResolvedValueOnce({ lastInsertRowid: 2, changes: 1 });
+      mockDb.get.mockReset();
+      // verifyToken check
+      mockDb.get.mockResolvedValueOnce({ id: 1, nama: 'Admin', email: 'admin@test.com', role: 'admin', status: 'Aktif', avatar: null });
+      // check existing email
+      mockDb.get.mockResolvedValueOnce(undefined);
+      // after insert get
       mockDb.get.mockResolvedValueOnce({ id: 2, nama: 'Test User', email: 'test@test.com', role: 'operator', status: 'Aktif' });
 
-      const res = await request(app).post('/api/auth/register').send(validUser);
+      const res = await request(app).post('/api/auth/register').set(adminAuth).send(validUser);
       expect(res.status).toBe(201);
       expect(res.body.data.token).toBeDefined();
     });
 
     test('should reject missing fields', async () => {
-      const res = await request(app).post('/api/auth/register').send({ nama: 'Test' });
+      const res = await request(app).post('/api/auth/register').set(adminAuth).send({ nama: 'Test' });
       expect(res.status).toBe(400);
     });
 
     test('should reject invalid role', async () => {
-      const res = await request(app).post('/api/auth/register').send({ ...validUser, role: 'superadmin' });
+      const res = await request(app).post('/api/auth/register').set(adminAuth).send({ ...validUser, role: 'superadmin' });
       expect(res.status).toBe(400);
     });
 
     test('should reject short password', async () => {
-      const res = await request(app).post('/api/auth/register').send({ ...validUser, password: '12345' });
+      const res = await request(app).post('/api/auth/register').set(adminAuth).send({ ...validUser, password: '12345' });
       expect(res.status).toBe(400);
     });
 
     test('should reject duplicate email', async () => {
+      mockDb.get.mockReset();
+      mockDb.get.mockResolvedValueOnce({ id: 1, nama: 'Admin', email: 'admin@test.com', role: 'admin', status: 'Aktif', avatar: null });
       mockDb.get.mockResolvedValueOnce({ id: 1, email: 'test@test.com' });
-      const res = await request(app).post('/api/auth/register').send(validUser);
+      const res = await request(app).post('/api/auth/register').set(adminAuth).send(validUser);
       expect(res.status).toBe(409);
     });
   });

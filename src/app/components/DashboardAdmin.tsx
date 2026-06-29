@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Send, Folder, BarChart3, Users, Settings, Shield, Database } from 'lucide-react';
+import { Mail, Send, Folder, Users, Shield, Database } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useSSE } from '../../hooks/useSSE';
 import { DateTimeDisplay } from './DateTimeDisplay';

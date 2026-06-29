@@ -14,13 +14,9 @@ describe('Laporan Routes', () => {
     test('should return rekap laporan', async () => {
       mockDb.get.mockResolvedValueOnce(adminUser); // verifyToken
       mockDb.all.mockResolvedValueOnce([
-        { id: 1, kode: '000', nama: 'Umum', keterangan: 'Surat umum' },
-        { id: 2, kode: '005', nama: 'Undangan', keterangan: 'Undangan' },
+        { klasifikasi_id: 1, kode: '000', nama: 'Umum', surat_masuk: 3, surat_keluar: 2 },
+        { klasifikasi_id: 2, kode: '005', nama: 'Undangan', surat_masuk: 1, surat_keluar: 0 },
       ]);
-      mockDb.get.mockResolvedValueOnce({ total: 3 });
-      mockDb.get.mockResolvedValueOnce({ total: 2 });
-      mockDb.get.mockResolvedValueOnce({ total: 1 });
-      mockDb.get.mockResolvedValueOnce({ total: 0 });
 
       const res = await request(app).get('/api/laporan/rekap').set(authHeader(generateTestToken()));
       expect(res.status).toBe(200);
@@ -32,10 +28,12 @@ describe('Laporan Routes', () => {
   describe('GET /api/laporan/statistik-bulanan', () => {
     test('should return monthly statistics', async () => {
       mockDb.get.mockResolvedValueOnce(adminUser); // verifyToken
-      for (let i = 0; i < 12; i++) {
-        mockDb.get.mockResolvedValueOnce({ total: i });
-        mockDb.get.mockResolvedValueOnce({ total: i + 1 });
-      }
+      mockDb.all.mockResolvedValueOnce([
+        { bulan: 1, total: 0 }, { bulan: 2, total: 1 }, { bulan: 3, total: 2 },
+      ]);
+      mockDb.all.mockResolvedValueOnce([
+        { bulan: 1, total: 1 }, { bulan: 2, total: 2 }, { bulan: 3, total: 3 },
+      ]);
       const res = await request(app).get('/api/laporan/statistik-bulanan').set(authHeader(generateTestToken()));
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(12);
@@ -45,10 +43,12 @@ describe('Laporan Routes', () => {
   describe('GET /api/laporan/grafik', () => {
     test('should return chart data', async () => {
       mockDb.get.mockResolvedValueOnce(adminUser); // verifyToken
-      for (let i = 0; i < 6; i++) {
-        mockDb.get.mockResolvedValueOnce({ total: i });
-        mockDb.get.mockResolvedValueOnce({ total: i * 2 });
-      }
+      mockDb.all.mockResolvedValueOnce([
+        { tahun: 2026, bulan: 1, total: 0 }, { tahun: 2026, bulan: 2, total: 1 },
+      ]);
+      mockDb.all.mockResolvedValueOnce([
+        { tahun: 2026, bulan: 1, total: 0 }, { tahun: 2026, bulan: 2, total: 2 },
+      ]);
       const res = await request(app).get('/api/laporan/grafik').set(authHeader(generateTestToken()));
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(6);

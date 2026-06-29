@@ -66,7 +66,8 @@ exports.getAll = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -90,7 +91,8 @@ exports.getById = async (req, res) => {
 
     res.json({ success: true, data: row });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -140,7 +142,8 @@ exports.create = async (req, res) => {
     broadcast('disposisi:created', newRow);
     res.status(201).json({ success: true, message: 'Disposisi berhasil dibuat.', data: newRow });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -182,7 +185,8 @@ exports.update = async (req, res) => {
     broadcast('disposisi:updated', updated);
     res.json({ success: true, message: 'Disposisi berhasil diperbarui.', data: updated });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -196,8 +200,8 @@ exports.approve = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Disposisi tidak ditemukan.' });
     }
 
-    if (existing.kepada_user_id !== req.user.id && existing.dari_user_id !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Tidak memiliki akses untuk menyetujui disposisi ini.' });
+    if (existing.kepada_user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Hanya penerima disposisi yang dapat menyetujui.' });
     }
 
     await db.run(
@@ -215,7 +219,8 @@ exports.approve = async (req, res) => {
     broadcast('disposisi:approved', { id: parseInt(id), status: 'Disetujui', surat_masuk_id: existing.surat_masuk_id });
     res.json({ success: true, message: 'Disposisi berhasil disetujui.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -229,8 +234,8 @@ exports.reject = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Disposisi tidak ditemukan.' });
     }
 
-    if (existing.kepada_user_id !== req.user.id && existing.dari_user_id !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Tidak memiliki akses untuk menolak disposisi ini.' });
+    if (existing.kepada_user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Hanya penerima disposisi yang dapat menolak.' });
     }
 
     await db.run(
@@ -255,7 +260,8 @@ exports.reject = async (req, res) => {
     broadcast('disposisi:rejected', { id: parseInt(id), status: 'Ditolak', surat_masuk_id: existing.surat_masuk_id });
     res.json({ success: true, message: 'Disposisi berhasil ditolak.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -283,7 +289,8 @@ exports.selesai = async (req, res) => {
     broadcast('disposisi:selesai', { id: parseInt(id), status: 'Selesai', surat_masuk_id: existing.surat_masuk_id });
     res.json({ success: true, message: 'Disposisi berhasil diselesaikan.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -309,6 +316,7 @@ exports.delete = async (req, res) => {
     broadcast('disposisi:deleted', { id: parseInt(id) });
     res.json({ success: true, message: 'Disposisi berhasil dihapus.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };

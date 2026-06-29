@@ -64,17 +64,6 @@ const getMenuItems = (role: string) => {
 export function Sidebar({ activePage, onPageChange, userRole, sidebarOpen, onClose }: SidebarProps) {
   const menuItems = getMenuItems(userRole);
 
-  const getSidebarBgColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-blue-900';
-      case 'kades':
-        return 'bg-blue-900';
-      default:
-        return 'bg-blue-900';
-    }
-  };
-
   const getUserInfo = () => {
     const saved = localStorage.getItem('user');
     let nama = userRole === 'admin' ? 'Admin Sistem' : userRole === 'kades' || userRole === 'pimpinan' ? 'Kepala Desa' : 'Operator Desa';
@@ -82,14 +71,14 @@ export function Sidebar({ activePage, onPageChange, userRole, sidebarOpen, onClo
       try {
         const parsed = JSON.parse(saved);
         if (parsed.nama) nama = parsed.nama;
-      } catch {}
+      } catch (e) { console.warn('Gagal parse user info:', e); }
     }
     const jabatan = userRole === 'admin' ? 'Admin' : userRole === 'kades' || userRole === 'pimpinan' ? 'Kepala Desa' : 'Operator';
     return { nama, jabatan, desa: 'Desa Karangasem' };
   };
 
   const userInfo = getUserInfo();
-  const sidebarBgColor = getSidebarBgColor(userRole);
+  const sidebarBgColor = 'bg-blue-900';
 
   return (
     <>

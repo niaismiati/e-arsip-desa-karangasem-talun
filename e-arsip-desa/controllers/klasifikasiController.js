@@ -4,11 +4,13 @@ const { broadcast } = require('../utils/sse');
 exports.getAll = async (req, res) => {
   try {
     const { search } = req.query;
+    // Optimized: LEFT JOIN + GROUP BY instead of correlated subqueries
     let sql = `
       SELECT k.*,
-        (SELECT COUNT(*) FROM surat_masuk WHERE klasifikasi_id = k.id) + 
-        (SELECT COUNT(*) FROM surat_keluar WHERE klasifikasi_id = k.id) as total_arsip
+        COALESCE(sm.total, 0) + COALESCE(sk.total, 0) as total_arsip
       FROM klasifikasi k
+      LEFT JOIN (SELECT klasifikasi_id, COUNT(*) as total FROM surat_masuk GROUP BY klasifikasi_id) sm ON k.id = sm.klasifikasi_id
+      LEFT JOIN (SELECT klasifikasi_id, COUNT(*) as total FROM surat_keluar GROUP BY klasifikasi_id) sk ON k.id = sk.klasifikasi_id
       WHERE 1=1
     `;
     const params = [];
@@ -20,7 +22,8 @@ exports.getAll = async (req, res) => {
     const rows = await db.all(sql, params);
     res.json({ success: true, data: rows });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -32,7 +35,8 @@ exports.getById = async (req, res) => {
     }
     res.json({ success: true, data: row });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -65,7 +69,8 @@ exports.create = async (req, res) => {
 
     res.status(201).json({ success: true, message: 'Klasifikasi berhasil ditambahkan.', data: newRow });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -106,7 +111,8 @@ exports.update = async (req, res) => {
 
     res.json({ success: true, message: 'Klasifikasi berhasil diperbarui.', data: updated });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };
 
@@ -138,6 +144,7 @@ exports.delete = async (req, res) => {
 
     res.json({ success: true, message: 'Klasifikasi berhasil dihapus.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan internal server.' });
   }
 };

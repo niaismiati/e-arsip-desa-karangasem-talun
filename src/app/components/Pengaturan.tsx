@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Settings, User, Bell, Lock, Database, Download, Upload, Trash2, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings, Bell, Lock, Database, Download, Upload, Trash2, Save } from 'lucide-react';
 
 interface AppSettings {
   tema: string;
@@ -12,7 +12,7 @@ function loadSettings(): AppSettings {
   try {
     const saved = localStorage.getItem('appSettings');
     if (saved) return JSON.parse(saved);
-  } catch {}
+  } catch (e) { console.warn('Gagal load settings:', e); }
   return { tema: 'light', notifications: true, autoLogout: 30, backupOtomatis: 'minggu' };
 }
 
