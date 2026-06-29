@@ -87,6 +87,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "4.7.0",
     "autoprefixer": "^10.5.0",
     "concurrently": "^8.2.0",
@@ -95,6 +96,7 @@
     "nodemon": "^3.0.1",
     "postcss": "^8.5.13",
     "tailwindcss": "^4.2.4",
+    "typescript": "^6.0.3",
     "vite": "6.3.5",
     "vitest": "^4.1.9"
   },

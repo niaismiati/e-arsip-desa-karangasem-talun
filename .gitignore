@@ -46,3 +46,8 @@ uploads/
 
 # Exposed JWT token
 token.txt
+
+# Academic documents
+public/*.pdf
+public/*.pptx
+public/togaf_ppt_preview.html

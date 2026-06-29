@@ -15,7 +15,7 @@ class MockEventSource {
   }
 }
 
-global.EventSource = MockEventSource as any;
+vi.stubGlobal('EventSource', MockEventSource);
 
 describe('SSE Hook (useSSE)', () => {
   beforeEach(() => {

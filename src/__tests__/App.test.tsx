@@ -35,8 +35,8 @@ describe('App Component', () => {
     const adminMod = await import('../app/components/DashboardAdmin');
     const operatorMod = await import('../app/components/DashboardOperator');
     const pimpinanMod = await import('../app/components/DashboardPimpinan');
-    expect(adminMod.DashboardAdmin ?? adminMod.default).toBeDefined();
-    expect(operatorMod.DashboardOperator ?? operatorMod.default).toBeDefined();
-    expect(pimpinanMod.DashboardPimpinan ?? pimpinanMod.default).toBeDefined();
+    expect((adminMod as any).DashboardAdmin).toBeDefined();
+    expect((operatorMod as any).DashboardOperator).toBeDefined();
+    expect((pimpinanMod as any).DashboardPimpinan).toBeDefined();
   });
 });
